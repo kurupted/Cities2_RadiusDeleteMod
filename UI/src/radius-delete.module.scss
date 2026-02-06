@@ -1,0 +1,27 @@
+.row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 6rem; /* Spacing between rows */
+    width: 100%;
+}
+
+.label {
+    font-size: 14rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 4rem;
+}
+
+.slider {
+    width: 100%;
+    cursor: pointer;
+    /* You can add more specific slider styling here if needed, 
+       but the game's default input[type=range] usually works okay */
+}
+
+.filterRow {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 4rem; /* Space between filter buttons */
+    margin-top: 4rem;
+}
