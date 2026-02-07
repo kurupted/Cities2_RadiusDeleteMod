@@ -1,61 +1,36 @@
-.row {
+.container {
     display: flex;
     flex-direction: column;
-    margin-bottom: 6rem; /* Spacing between rows */
-    width: 100%;
+    gap: 8rem;
 }
 
-.label {
-    font-size: 14rem;
-    color: rgba(255, 255, 255, 0.8);
-    margin-bottom: 4rem;
-}
-
-.slider {
-    width: 100%;
-    cursor: pointer;
-    /* You can add more specific slider styling here if needed, 
-       but the game's default input[type=range] usually works okay */
-}
-
-.filterRow {
+.radiusRow {
     display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 4rem; /* Space between filter buttons */
-    margin-top: 4rem;
+    align-items: center;
+    gap: 10rem;
+    padding: 4rem 0;
 }
 
-.panelContainer {
-    display: flex;
-    flex-direction: column;
-    padding: 5px 10px;
-    margin-top: 5px;
-    background-color: rgba(0, 0, 0, 0.4); /* Mimic game panel background */
-    border-radius: 4px;
-}
-
-.panelHeader {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
-    text-transform: uppercase;
-    margin-bottom: 5px;
-    font-weight: bold;
-}
-
-.row {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 5px;
-}
-
-.label {
+.stepBtn {
+    width: 32rem;
+    height: 32rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1rem solid rgba(255, 255, 255, 0.2);
     color: white;
-    font-size: 14px;
-    margin-bottom: 2px;
+    font-size: 18rem;
+    cursor: pointer;
+    &:hover { background: rgba(255, 255, 255, 0.2); }
 }
 
 .slider {
-    width: 100%;
-    cursor: pointer;
+    flex: 1;
+    height: 6rem;
+}
+
+.filterGrid {
+    display: flex; /* Flex-row layout */
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6rem;
+    justify-content: flex-start;
 }

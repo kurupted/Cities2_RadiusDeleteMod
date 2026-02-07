@@ -108,26 +108,23 @@ namespace RadiusDelete
             m_ActiveToolState.Update(state);
         }
 
+        // Inside RadiusDeleteUISystem.cs
+
         private void UpdateToolState(ToolBaseSystem tool)
         {
             int state = 0;
-
             if (tool != null)
             {
+                // Reference check is now mandatory because IDs are identical
                 if (tool == m_RadiusDeleteTool)
                 {
-                    state = 2; // Our Tool
-                }
-                else if (tool == m_BulldozeToolSystem)
-                {
-                    state = 1; // Vanilla
+                    state = 2; // Our custom Radius Mode
                 }
                 else if (tool.toolID == "Bulldoze Tool")
                 {
-                    state = 1; // Better Bulldozer (or other mods)
+                    state = 1; // Vanilla or other Bulldoze mods
                 }
             }
-
             m_ActiveToolState.Update(state);
         }
         
