@@ -57,7 +57,6 @@ namespace RadiusDelete
             m_PlantData = SystemAPI.GetComponentLookup<PlantData>(true);
             m_Transform = SystemAPI.GetComponentLookup<Game.Objects.Transform>(true);
 
-            // This query finds every entity currently highlighted so we can clear them.
             m_HighlightQuery = GetEntityQuery(ComponentType.ReadWrite<Game.Tools.Highlighted>());
         }
 
@@ -69,7 +68,6 @@ namespace RadiusDelete
         protected override void OnStopRunning()
         {
             if (applyAction != null) applyAction.shouldBeEnabled = false;
-            // CLEANUP: Remove all highlights when the tool is closed.
             if (!m_HighlightQuery.IsEmptyIgnoreFilter)
             {
                 EntityManager.RemoveComponent<Game.Tools.Highlighted>(m_HighlightQuery);
@@ -95,8 +93,6 @@ namespace RadiusDelete
             m_PlantData.Update(this);
             m_Transform.Update(this);
 
-            // 1. CLEAR HIGHLIGHTS FROM PREVIOUS FRAME
-            // This fixes the "staying forever" issue by resetting the brush every frame.
             if (!m_HighlightQuery.IsEmptyIgnoreFilter)
             {
                 EntityManager.RemoveComponent<Game.Tools.Highlighted>(m_HighlightQuery);
@@ -109,7 +105,6 @@ namespace RadiusDelete
                     return inputDeps;
                 }
 
-                // 2. SEARCH
                 NativeList<Entity> targets = new NativeList<Entity>(Allocator.TempJob);
                 RadiusDeleteSearchJob searchJob = new RadiusDeleteSearchJob
                 {
@@ -125,17 +120,17 @@ namespace RadiusDelete
                 JobHandle searchHandle = searchJob.Schedule(JobHandle.CombineDependencies(objDep, netDep, inputDeps));
                 searchHandle.Complete();
 
-                // 3. APPLY HIGHLIGHTS
+                /* Highlighting trigger commented out per request
                 for (int i = 0; i < targets.Length; i++)
                 {
                     Entity target = targets[i];
-                    if (EntityManager.Exists(target) && IsTypeValid(target, ActiveFilters))
+                    if (EntityManager.Exists(target) && IsTypeValid(target, ActiveFilters, hit.m_HitPosition.y))
                     {
                         EntityManager.AddComponent<Game.Tools.Highlighted>(target);
                     }
                 }
+                */
 
-                // 4. VISUALIZATION
                 RadiusDeleteVisualizationJob vizJob = new RadiusDeleteVisualizationJob()
                 {
                     m_OverlayBuffer = m_OverlayRenderSystem.GetBuffer(out JobHandle outJobHandle),
@@ -146,7 +141,6 @@ namespace RadiusDelete
                 inputDeps = vizJob.Schedule(JobHandle.CombineDependencies(searchHandle, outJobHandle));
                 m_OverlayRenderSystem.AddBufferWriter(inputDeps);
 
-                // 5. DELETE
                 if (applyAction != null && applyAction.WasPressedThisFrame())
                 {
                     inputDeps.Complete();
@@ -195,11 +189,7 @@ namespace RadiusDelete
                     Entity entity = rawResults[i];
                     if (!EntityManager.Exists(entity)) continue;
 
-                    // FIX: Full qualification to avoid Ambiguous Reference errors.
-                    if (EntityManager.HasComponent<Game.Objects.Marker>(entity)) continue;
-                    if (EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null) continue;
-
-                    if (IsTypeValid(entity, filters))
+                    if (IsTypeValid(entity, filters, center.y))
                     {
                         finalDeleteSet.Add(entity);
 
@@ -238,12 +228,28 @@ namespace RadiusDelete
             }
         }
 
-        private bool IsTypeValid(Entity entity, DeleteFilters active)
+        private bool IsTypeValid(Entity entity, DeleteFilters active, float surfaceHeight)
         {
-            // Ignore things already being deleted.
             if (EntityManager.HasComponent<Game.Common.Deleted>(entity)) return false;
 
-            // FIX: Ambiguous Reference resolution for Surfaces.
+            // 1. Relative Elevation check (Networks)
+            // Fixes CS1061: Use HasComponent and GetComponentData instead of TryGetComponent
+            if (EntityManager.HasComponent<Game.Net.Elevation>(entity))
+            {
+                var elevation = EntityManager.GetComponentData<Game.Net.Elevation>(entity);
+                if (elevation.m_Elevation.x < 0) return false;
+            }
+
+            // 2. Absolute Depth check relative to the surface hit point (fixes the "hill" issue)
+            if (EntityManager.HasComponent<Game.Objects.Transform>(entity))
+            {
+                var transform = EntityManager.GetComponentData<Game.Objects.Transform>(entity);
+                if (transform.m_Position.y < surfaceHeight - 19.0f) return false;
+            }
+
+            if (EntityManager.HasComponent<Game.Objects.Marker>(entity)) return false;
+            if (EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null) return false;
+
             if (EntityManager.HasComponent<Game.Areas.Surface>(entity))
                 return (active & DeleteFilters.Surfaces) != 0;
 
@@ -259,7 +265,6 @@ namespace RadiusDelete
             if (EntityManager.HasComponent<ObjectData>(prefab)) 
                 return (active & DeleteFilters.Props) != 0;
 
-            // FIX: Full qualification for Net types.
             if (EntityManager.HasComponent<Game.Net.Edge>(entity) || EntityManager.HasComponent<Game.Net.Node>(entity))
                 return (active & DeleteFilters.Networks) != 0;
 
@@ -319,12 +324,18 @@ namespace RadiusDelete
         {
             if (Intersect(bounds))
             {
+                float3 position;
                 if (m_Transform.HasComponent(entity))
                 {
-                    float2 pos = m_Transform[entity].m_Position.xz;
-                    if (math.distancesq(pos, m_Center.xz) <= m_RadiusSq) m_Results.Add(entity);
+                    position = m_Transform[entity].m_Position;
                 }
                 else
+                {
+                    // Fallback for Edges: calculate the center of the Bounds3 manually
+                    position = (bounds.m_Bounds.min + bounds.m_Bounds.max) * 0.5f;
+                }
+
+                if (math.distancesq(position, m_Center) <= m_RadiusSq) 
                 {
                     m_Results.Add(entity);
                 }
