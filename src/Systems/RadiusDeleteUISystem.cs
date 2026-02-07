@@ -89,7 +89,24 @@ namespace RadiusDelete
             m_FiltersBinding.Update((int)m_RadiusDeleteTool.ActiveFilters);
         }
 
-        private void OnToolChanged(ToolBaseSystem tool) => UpdateToolState(tool);
+        private void OnToolChanged(ToolBaseSystem tool)
+        {
+            int state = 0;
+            if (tool != null)
+            {
+                // Reference check ensures we distinguish "Our Imposter Tool" from "Vanilla Tool"
+                // even though they share the same ID string.
+                if (tool == m_RadiusDeleteTool) 
+                {
+                    state = 2; 
+                }
+                else if (tool == m_BulldozeToolSystem || tool.toolID == "Bulldoze Tool")
+                {
+                    state = 1;
+                }
+            }
+            m_ActiveToolState.Update(state);
+        }
 
         private void UpdateToolState(ToolBaseSystem tool)
         {

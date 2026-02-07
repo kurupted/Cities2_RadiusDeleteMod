@@ -1,12 +1,17 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { bindValue, trigger, useValue } from "cs2/api";
 import { tool } from "cs2/bindings";
+import { VanillaComponentResolver } from "./vanilla-resolver";
+import styles from "./radius-delete.module.scss";
 
-// Note: We are NOT importing VanillaComponentResolver yet to isolate the crash.
-
+// Bindings
 const toolState$ = bindValue<number>("RadiusDelete", "ToolState");
 const radius$ = bindValue<number>("RadiusDelete", "Radius");
 const filters$ = bindValue<number>("RadiusDelete", "Filters");
+
+// ICON FIX: Embedded Base64 SVG. 
+// This creates a simple white circle icon. No external files needed.
+const iconCircle = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MCA1MCI+CiAgPGNpcmNsZSBjeD0iMjUiIGN5PSIyNSIgcj0iMjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMyIgLz4KPC9zdmc+";
 
 export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
     const toolState = useValue(toolState$);
@@ -19,63 +24,60 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
     const toggleTool = () => trigger("RadiusDelete", "ToggleTool");
     const setRadius = (x: number) => trigger("RadiusDelete", "SetRadius", x);
 
-    // DEBUG LOG: Watch the state changes in the console
-    useEffect(() => {
-        if (isBulldozerActive) {
-            console.log(`[RadiusDelete] State: ${toolState}, Active: ${isBulldozerActive}`);
-        }
-    }, [toolState, isBulldozerActive]);
-
+    // Call original component
     const result = Component(props);
 
     if (isBulldozerActive) {
         if (!result.props.children) result.props.children = [];
 
-        // SAFE MODE UI: Standard HTML elements only. 
-        // This cannot crash due to missing Game Assets or FocusKeys.
-        const mySections = (
-            <div key="radius-delete-safe-ui" style={{
-                padding: "10px",
-                backgroundColor: "rgba(0,0,0,0.8)",
-                border: "1px solid red",
-                color: "white",
-                marginTop: "10px",
-                pointerEvents: "auto" // Ensure we can click it
-            }}>
-                <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Radius Tool (Debug)</div>
+        const Section = VanillaComponentResolver.instance.Section;
+        const ToolButton = VanillaComponentResolver.instance.ToolButton;
+        const theme = VanillaComponentResolver.instance.toolButtonTheme;
+        const FOCUS_DISABLED = VanillaComponentResolver.instance.FOCUS_DISABLED;
 
-                <button
-                    onClick={toggleTool}
-                    style={{
-                        background: toolState === 2 ? "green" : "grey",
-                        color: "white",
-                        padding: "5px",
-                        marginBottom: "10px",
-                        width: "100%"
-                    }}
-                >
-                    {toolState === 2 ? "ENABLED" : "ENABLE RADIUS"}
-                </button>
-
-                {toolState === 2 && (
-                    <div>
-                        <div style={{ marginBottom: "5px" }}>Radius: {Math.round(radius || 20)}m</div>
-                        <input
-                            type="range"
-                            min={5} max={200} step={5}
-                            value={radius || 20}
-                            onChange={(e) => setRadius(parseFloat(e.target.value))}
-                            style={{ width: "100%" }}
-                        />
-                    </div>
-                )}
-            </div>
+        // PART 1: The Toggle Button
+        // We keep 'Section' here because it only has ONE child (safe).
+        const toggleSection = (
+            <Section title="Radius Delete" key="radius-toggle-section">
+                <ToolButton
+                    className={theme.button}
+                    selected={toolState === 2}
+                    src={iconCircle} // Using Base64 icon
+                    onSelect={toggleTool}
+                    tooltip="Toggle Radius Delete Mode"
+                    focusKey={FOCUS_DISABLED}
+                />
+            </Section>
         );
 
+        // PART 2: The Settings Panel
+        // CRITICAL FIX: We do NOT use 'Section' here. We use a plain div.
+        // This avoids the "Focus node can only host a single child" crash completely.
+        const settingsSection = toolState === 2 ? (
+            <div key="radius-settings-panel" className={styles.panelContainer}>
+                <div className={styles.panelHeader}>Radius Settings</div>
+
+                {/* Slider */}
+                <div className={styles.row}>
+                    <div className={styles.label}>Size: {Math.round(radius || 20)}m</div>
+                    <input
+                        type="range"
+                        className={styles.slider}
+                        min={5} max={200} step={5}
+                        value={radius || 20}
+                        onChange={(e) => setRadius(parseFloat(e.target.value))}
+                    />
+                </div>
+            </div>
+        ) : null;
+
+        // Injection
         if (Array.isArray(result.props.children)) {
-            result.props.children.push(mySections);
+            result.props.children.push(toggleSection);
+            if (settingsSection) result.props.children.push(settingsSection);
         } else {
-            result.props.children = [result.props.children, mySections];
+            result.props.children = [result.props.children, toggleSection];
+            if (settingsSection) result.props.children.push(settingsSection);
         }
     }
 

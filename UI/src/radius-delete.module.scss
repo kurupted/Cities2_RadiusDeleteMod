@@ -25,3 +25,37 @@
     gap: 4rem; /* Space between filter buttons */
     margin-top: 4rem;
 }
+
+.panelContainer {
+    display: flex;
+    flex-direction: column;
+    padding: 5px 10px;
+    margin-top: 5px;
+    background-color: rgba(0, 0, 0, 0.4); /* Mimic game panel background */
+    border-radius: 4px;
+}
+
+.panelHeader {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 5px;
+}
+
+.label {
+    color: white;
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.slider {
+    width: 100%;
+    cursor: pointer;
+}

@@ -31,7 +31,7 @@ export class VanillaComponentResolver {
     public get ToolButton(): any { return this.cachedData["ToolButton"] ?? this.updateCache("ToolButton") ?? "button" }
     public get toolButtonTheme(): any { return this.cachedData["toolButtonTheme"] ?? this.updateCache("toolButtonTheme") ?? {} }
 
-    // --- THIS IS THE FIX ---
+    // Critical for preventing UI crash
     public get FOCUS_DISABLED(): any {
         const FocusKey = this.cachedData["FocusKey"] ?? this.updateCache("FocusKey");
         return FocusKey?.NONE ?? null;
