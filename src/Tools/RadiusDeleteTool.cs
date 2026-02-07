@@ -10,27 +10,19 @@ using Game.Prefabs;
 using Game.Rendering;
 using Game.Tools;
 using Game.Buildings;
-using Game.Vehicles;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RadiusDelete
 {
     [System.Flags]
     public enum DeleteFilters
     {
-        None = 0,
-        Networks = 1,
-        Buildings = 2,
-        Trees = 4,
-        Plants = 8,
-        Props = 16,
-        All = 31
+        None = 0, Networks = 1, Buildings = 2, Trees = 4, Plants = 8, Props = 16, All = 31
     }
 
     public partial class RadiusDeleteTool : BulldozeToolSystem
@@ -39,7 +31,6 @@ namespace RadiusDelete
         private Game.Objects.SearchSystem m_ObjectSearchSystem;
         private Game.Net.SearchSystem m_NetSearchSystem;
         private ToolRaycastSystem m_ToolRaycastSystem;
-        private BulldozeToolSystem m_VanillaBulldoze;
 
         private ComponentLookup<PrefabRef> m_PrefabRef;
         private ComponentLookup<BuildingData> m_BuildingData;
@@ -53,9 +44,6 @@ namespace RadiusDelete
         private BufferLookup<ConnectedEdge> m_ConnectedEdges;
         private ComponentLookup<Building> m_Building;
         private ComponentLookup<Temp> m_Temp;
-        
-        private BufferLookup<Game.Net.SubLane> m_SubLanes;
-        private BufferLookup<InstalledUpgrade> m_InstalledUpgrades;
         private BufferLookup<Game.Objects.SubObject> m_SubObjects;
 
         public float Radius = 20f;
@@ -70,7 +58,6 @@ namespace RadiusDelete
             m_ObjectSearchSystem = World.GetOrCreateSystemManaged<Game.Objects.SearchSystem>();
             m_NetSearchSystem = World.GetOrCreateSystemManaged<Game.Net.SearchSystem>();
             m_ToolRaycastSystem = World.GetOrCreateSystemManaged<ToolRaycastSystem>();
-            m_VanillaBulldoze = World.GetOrCreateSystemManaged<BulldozeToolSystem>();
 
             m_PrefabRef = SystemAPI.GetComponentLookup<PrefabRef>(true);
             m_BuildingData = SystemAPI.GetComponentLookup<BuildingData>(true);
@@ -84,9 +71,6 @@ namespace RadiusDelete
             m_ConnectedEdges = SystemAPI.GetBufferLookup<ConnectedEdge>(true);
             m_Building = SystemAPI.GetComponentLookup<Building>(true);
             m_Temp = SystemAPI.GetComponentLookup<Temp>(true);
-            
-            m_SubLanes = SystemAPI.GetBufferLookup<Game.Net.SubLane>(true);
-            m_InstalledUpgrades = SystemAPI.GetBufferLookup<InstalledUpgrade>(true);
             m_SubObjects = SystemAPI.GetBufferLookup<Game.Objects.SubObject>(true);
         }
 
@@ -94,12 +78,9 @@ namespace RadiusDelete
         {
             base.InitializeRaycast();
             m_ToolRaycastSystem.typeMask = TypeMask.Terrain | TypeMask.StaticObjects | TypeMask.Net;
-            // Limit cursor to surface objects only
-            m_ToolRaycastSystem.collisionMask = CollisionMask.OnGround | CollisionMask.Overground;
+            // Expanded mask to ensure we don't miss sunken roads
+            m_ToolRaycastSystem.collisionMask = CollisionMask.OnGround | CollisionMask.Overground | CollisionMask.Underground;
         }
-
-        protected override void OnStartRunning() { applyAction.shouldBeEnabled = true; }
-        protected override void OnStopRunning() { applyAction.shouldBeEnabled = false; }
 
         protected override JobHandle OnUpdate(JobHandle inputDeps)
         {
@@ -115,29 +96,30 @@ namespace RadiusDelete
             m_ConnectedEdges.Update(this);
             m_Building.Update(this);
             m_Temp.Update(this);
-            m_SubLanes.Update(this);
-            m_InstalledUpgrades.Update(this);
             m_SubObjects.Update(this);
 
             bool hitFound = GetRaycastResult(out Entity e, out RaycastHit hit);
-            if (hit.m_HitPosition.Equals(float3.zero)) hitFound = false;
-
-            if (!hitFound) return inputDeps;
-
-            RadiusDeleteVisualizationJob vizJob = new RadiusDeleteVisualizationJob()
+            
+            // Visualization
+            if (hitFound && !hit.m_HitPosition.Equals(float3.zero))
             {
-                m_OverlayBuffer = m_OverlayRenderSystem.GetBuffer(out JobHandle outJobHandle),
-                m_Position = hit.m_HitPosition,
-                m_Radius = Radius,
-                m_Color = new UnityEngine.Color(1f, 0f, 0f, 0.5f)
-            };
-            inputDeps = vizJob.Schedule(JobHandle.CombineDependencies(inputDeps, outJobHandle));
-            m_OverlayRenderSystem.AddBufferWriter(inputDeps);
+                RadiusDeleteVisualizationJob vizJob = new RadiusDeleteVisualizationJob()
+                {
+                    m_OverlayBuffer = m_OverlayRenderSystem.GetBuffer(out JobHandle outJobHandle),
+                    m_Position = hit.m_HitPosition,
+                    m_Radius = Radius,
+                    m_Color = new UnityEngine.Color(1f, 0f, 0f, 0.5f)
+                };
+                inputDeps = vizJob.Schedule(JobHandle.CombineDependencies(inputDeps, outJobHandle));
+                m_OverlayRenderSystem.AddBufferWriter(inputDeps);
 
-            if (applyAction.WasPressedThisFrame())
-            {
-                inputDeps.Complete();
-                DeleteInRadius(hit.m_HitPosition, Radius, ActiveFilters);
+                // Input Check
+                if (applyAction.WasPressedThisFrame())
+                {
+                    RadiusDeleteMod.Log.Info($"[Input] Button Pressed! Raycast Hit at {hit.m_HitPosition}. Entity: {e.Index}");
+                    inputDeps.Complete();
+                    DeleteInRadius(hit.m_HitPosition, Radius, ActiveFilters);
+                }
             }
 
             return inputDeps;
@@ -150,129 +132,161 @@ namespace RadiusDelete
             objDep.Complete();
             netDep.Complete();
 
-            NativeParallelHashSet<Entity> edgesToDelete = new NativeParallelHashSet<Entity>(100, Allocator.Temp);
-            NativeParallelHashSet<Entity> finalDeleteSet = new NativeParallelHashSet<Entity>(500, Allocator.Temp);
-            NativeList<Entity> rootCandidates = new NativeList<Entity>(Allocator.Temp);
+            NativeList<Entity> rawResults = new NativeList<Entity>(Allocator.Temp);
+            NativeParallelHashSet<Entity> processedRoots = new NativeParallelHashSet<Entity>(100, Allocator.Temp);
+            NativeParallelHashSet<Entity> finalDeleteSet = new NativeParallelHashSet<Entity>(200, Allocator.Temp);
 
             try
             {
-                RadiusDeleteMod.Log.Info($"[Audit] --- START DELETE --- (R:{radius} @ {center})");
+                RadiusDeleteMod.Log.Info($"[Logic] --- SEARCHING --- (R: {radius})");
 
-                // 1. Root Search
+                // 1. Gather Everything
                 RadiusDeleteSearchJob searchJob = new RadiusDeleteSearchJob
                 {
-                    m_Results = rootCandidates,
-                    m_EdgesFound = edgesToDelete,
+                    m_Results = rawResults,
                     m_Center = center,
                     m_RadiusSq = radius * radius,
                     m_SearchBounds = new Bounds2(center.xz - radius, center.xz + radius),
-                    m_Filters = filters,
                     m_ObjectSearchTree = objTree,
                     m_NetSearchTree = netTree,
-                    m_PrefabRef = m_PrefabRef,
-                    m_BuildingData = m_BuildingData,
-                    m_TreeData = m_TreeData,
-                    m_ObjectData = m_ObjectData,
-                    m_PlantData = m_PlantData,
-                    m_Owner = m_Owner,
-                    m_Transform = m_Transform,
-                    m_Edge = m_Edge,
-                    m_Node = m_Node,
-                    m_Building = m_Building,
-                    m_Temp = m_Temp
+                    m_Transform = m_Transform
                 };
                 searchJob.Run();
 
-                RadiusDeleteMod.Log.Info($"[Audit] Phase 1: Found {rootCandidates.Length} Root objects.");
+                RadiusDeleteMod.Log.Info($"[Logic] Search found {rawResults.Length} raw entities.");
 
-                foreach (var root in rootCandidates) finalDeleteSet.Add(root);
-
-                // 2. Cascade Search (Sub-objects)
-                // We create a temporary list to iterate while adding to the set
-                var tempArray = finalDeleteSet.ToNativeArray(Allocator.Temp);
-                int cascadeTotal = 0;
-                for (int i = 0; i < tempArray.Length; i++)
+                // 2. Filter & Redirect
+                int accepted = 0;
+                for (int i = 0; i < rawResults.Length; i++)
                 {
-                    Entity parent = tempArray[i];
+                    Entity raw = rawResults[i];
+                    Entity root = GetRoot(raw); // Redirect to Parent Road/Building
                     
-                    if (m_SubLanes.TryGetBuffer(parent, out var lanes))
+                    if (processedRoots.Contains(root)) continue;
+                    processedRoots.Add(root);
+
+                    string reason;
+                    if (IsValidRoot(root, filters, out reason))
                     {
-                        for (int j = 0; j < lanes.Length; j++) 
-                            if (finalDeleteSet.Add(lanes[j].m_SubLane)) cascadeTotal++;
+                        finalDeleteSet.Add(root);
+                        accepted++;
+                        if (accepted <= 5) RadiusDeleteMod.Log.Info($"[Accepted] #{i} RootID: {root.Index} ({reason})");
                     }
-                    if (m_InstalledUpgrades.TryGetBuffer(parent, out var upgrades))
+                    else
                     {
-                        for (int j = 0; j < upgrades.Length; j++) 
-                            if (finalDeleteSet.Add(upgrades[j].m_Upgrade)) cascadeTotal++;
-                    }
-                    if (m_SubObjects.TryGetBuffer(parent, out var subObjs))
-                    {
-                        for (int j = 0; j < subObjs.Length; j++) 
-                            if (finalDeleteSet.Add(subObjs[j].m_SubObject)) cascadeTotal++;
+                        // Log first few rejections to diagnose issues
+                        if (i < 5) RadiusDeleteMod.Log.Info($"[Rejected] #{i} RootID: {root.Index} Reason: {reason}");
                     }
                 }
-                tempArray.Dispose();
-                RadiusDeleteMod.Log.Info($"[Audit] Phase 2: Cascaded to {cascadeTotal} child entities.");
 
-                // 3. Topology Audit (Orphaned Nodes)
-                int nodesAdded = 0;
-                NativeList<Entity> nodesToVerify = new NativeList<Entity>(Allocator.Temp);
-                foreach (Entity edgeEntity in edgesToDelete)
+                // 3. Cascade SubObjects (Props/Trees on Buildings)
+                // We do NOT cascade Lanes or Upgrades - the engine handles those.
+                var roots = finalDeleteSet.ToNativeArray(Allocator.Temp);
+                for (int i = 0; i < roots.Length; i++)
                 {
-                    if (m_Edge.TryGetComponent(edgeEntity, out Game.Net.Edge edge))
+                    if (m_SubObjects.TryGetBuffer(roots[i], out var subObjs))
                     {
-                        ProcessNodeNeighbors(edge.m_Start, edgeEntity, ref nodesToVerify);
-                        ProcessNodeNeighbors(edge.m_End, edgeEntity, ref nodesToVerify);
+                        for (int j = 0; j < subObjs.Length; j++) finalDeleteSet.Add(subObjs[j].m_SubObject);
                     }
                 }
-                foreach (var node in nodesToVerify) 
-                    if (finalDeleteSet.Add(node)) nodesAdded++;
-                
-                RadiusDeleteMod.Log.Info($"[Audit] Phase 3: Added {nodesAdded} orphaned network nodes.");
+                roots.Dispose();
 
-                // 4. Final Audit & Delete
+                // 4. Topology (Orphan Nodes)
+                NativeList<Entity> orphanedNodes = new NativeList<Entity>(Allocator.Temp);
+                foreach (Entity entity in finalDeleteSet)
+                {
+                    if (m_Edge.TryGetComponent(entity, out Game.Net.Edge edge))
+                    {
+                        ProcessNodeNeighbors(edge.m_Start, entity, ref orphanedNodes);
+                        ProcessNodeNeighbors(edge.m_End, entity, ref orphanedNodes);
+                    }
+                }
+                foreach (var node in orphanedNodes) finalDeleteSet.Add(node);
+
+                // 5. Delete
                 if (finalDeleteSet.Count() > 0)
                 {
                     var deleteArray = finalDeleteSet.ToNativeArray(Allocator.Temp);
-                    int edges = 0, nodes = 0, misc = 0;
-                    
-                    for (int i = 0; i < deleteArray.Length; i++)
-                    {
-                        Entity ent = deleteArray[i];
-                        if (m_Edge.HasComponent(ent)) edges++;
-                        else if (m_Node.HasComponent(ent)) nodes++;
-                        else misc++;
-                        
-                        // Log full detail for small deletes, first 50 for big ones
-                        if (deleteArray.Length < 100 || i < 50)
-                            RadiusDeleteMod.Log.Info($"[Final Delete List] Item #{i}: ID:{ent.Index} (Edge:{m_Edge.HasComponent(ent)})");
-                    }
-
-                    RadiusDeleteMod.Log.Info($"[Audit] DELETING: {edges} Edges, {nodes} Nodes, {misc} Subelements/Props.");
-                    EntityManager.AddComponent<Deleted>(deleteArray);
-                    RadiusDeleteMod.Log.Info($"[Audit] SUCCESS.");
+                    RadiusDeleteMod.Log.Info($"[Logic] Deleting {deleteArray.Length} items.");
+                    EntityManager.AddComponent<Game.Common.Deleted>(deleteArray);
+                }
+                else
+                {
+                    RadiusDeleteMod.Log.Info($"[Logic] 0 items to delete after filtering.");
                 }
             }
-            catch (System.Exception ex)
-            {
-                RadiusDeleteMod.Log.Error($"[Audit] FATAL ERROR IN RADIUS DELETE: {ex}");
-            }
+            catch (System.Exception ex) { RadiusDeleteMod.Log.Error($"[Logic] ERROR: {ex}"); }
             finally
             {
+                if (rawResults.IsCreated) rawResults.Dispose();
+                if (processedRoots.IsCreated) processedRoots.Dispose();
                 if (finalDeleteSet.IsCreated) finalDeleteSet.Dispose();
-                if (edgesToDelete.IsCreated) edgesToDelete.Dispose();
-                if (rootCandidates.IsCreated) rootCandidates.Dispose();
             }
         }
 
-        private void ProcessNodeNeighbors(Entity node, Entity triggeringEdge, ref NativeList<Entity> nodesToVerify)
+        private Entity GetRoot(Entity entity)
+        {
+            Entity current = entity;
+            int safety = 0;
+            while (m_Owner.HasComponent(current) && safety < 10)
+            {
+                Entity parent = m_Owner[current].m_Owner;
+                if (parent == Entity.Null) break;
+                current = parent;
+                safety++;
+            }
+            return current;
+        }
+
+        private bool IsValidRoot(Entity root, DeleteFilters filters, out string info)
+        {
+            info = "";
+            if (root == Entity.Null) { info = "Null"; return false; }
+            if (m_Temp.HasComponent(root)) { info = "Temp"; return false; }
+            
+            // Safe Underground Check (Nodes for Net, Transform for Objects)
+            if (m_Edge.TryGetComponent(root, out var edge))
+            {
+                // Network: Check if BOTH nodes are deep underground (-5m)
+                bool s = m_Transform.HasComponent(edge.m_Start) && m_Transform[edge.m_Start].m_Position.y < -5f;
+                bool e = m_Transform.HasComponent(edge.m_End) && m_Transform[edge.m_End].m_Position.y < -5f;
+                if (s && e) { info = "Net Deep Underground"; return false; }
+            }
+            else if (m_Transform.HasComponent(root))
+            {
+                // Object: Simple height check
+                if (m_Transform[root].m_Position.y < -5f) { info = "Obj Deep Underground"; return false; }
+            }
+
+            if (!m_PrefabRef.HasComponent(root)) { info = "No Prefab"; return false; }
+            Entity prefab = m_PrefabRef[root].m_Prefab;
+
+            // Filter Logic
+            if (m_BuildingData.HasComponent(prefab)) return CheckFilter(filters, DeleteFilters.Buildings, "Building", out info);
+            if (m_TreeData.HasComponent(prefab)) return CheckFilter(filters, DeleteFilters.Trees, "Tree", out info);
+            if (m_PlantData.HasComponent(prefab)) return CheckFilter(filters, DeleteFilters.Plants, "Plant", out info);
+            if (m_ObjectData.HasComponent(prefab)) return CheckFilter(filters, DeleteFilters.Props, "Prop", out info);
+            if (m_Edge.HasComponent(root) || m_Node.HasComponent(root)) return CheckFilter(filters, DeleteFilters.Networks, "Network", out info);
+
+            info = "Unknown Type";
+            return false;
+        }
+
+        private bool CheckFilter(DeleteFilters active, DeleteFilters target, string name, out string info)
+        {
+            if ((active & target) != 0) { info = name; return true; }
+            info = $"{name} Filtered";
+            return false;
+        }
+
+        private void ProcessNodeNeighbors(Entity node, Entity triggeringEdge, ref NativeList<Entity> orphanedNodes)
         {
             if (node == Entity.Null || !EntityManager.Exists(node)) return;
             if (m_ConnectedEdges.TryGetBuffer(node, out var connections))
             {
                 if (connections.Length == 1 && connections[0].m_Edge == triggeringEdge)
                 {
-                    nodesToVerify.Add(node);
+                    orphanedNodes.Add(node);
                 }
                 else
                 {
@@ -280,15 +294,16 @@ namespace RadiusDelete
                     {
                         if (conn.m_Edge != triggeringEdge && conn.m_Edge != Entity.Null)
                         {
-                            EntityManager.AddComponent<Updated>(conn.m_Edge);
+                            EntityManager.AddComponent<Game.Common.Updated>(conn.m_Edge);
+                            // Update neighbors' start/end nodes to refresh geometry
                             if (m_Edge.TryGetComponent(conn.m_Edge, out Game.Net.Edge neighborEdge))
                             {
-                                EntityManager.AddComponent<Updated>(neighborEdge.m_Start);
-                                EntityManager.AddComponent<Updated>(neighborEdge.m_End);
+                                EntityManager.AddComponent<Game.Common.Updated>(neighborEdge.m_Start);
+                                EntityManager.AddComponent<Game.Common.Updated>(neighborEdge.m_End);
                             }
                         }
                     }
-                    EntityManager.AddComponent<Updated>(node);
+                    EntityManager.AddComponent<Game.Common.Updated>(node);
                 }
             }
         }
@@ -308,90 +323,19 @@ namespace RadiusDelete
     public struct RadiusDeleteSearchJob : Unity.Jobs.IJob
     {
         public NativeList<Entity> m_Results;
-        public NativeParallelHashSet<Entity> m_EdgesFound;
         public float3 m_Center;
         public float m_RadiusSq;
         public Bounds2 m_SearchBounds;
-        public DeleteFilters m_Filters;
         
         [ReadOnly] public NativeQuadTree<Entity, QuadTreeBoundsXZ> m_ObjectSearchTree;
         [ReadOnly] public NativeQuadTree<Entity, QuadTreeBoundsXZ> m_NetSearchTree;
-        [ReadOnly] public ComponentLookup<PrefabRef> m_PrefabRef;
-        [ReadOnly] public ComponentLookup<BuildingData> m_BuildingData;
-        [ReadOnly] public ComponentLookup<TreeData> m_TreeData;
-        [ReadOnly] public ComponentLookup<ObjectData> m_ObjectData;
-        [ReadOnly] public ComponentLookup<PlantData> m_PlantData;
-        [ReadOnly] public ComponentLookup<Owner> m_Owner;
         [ReadOnly] public ComponentLookup<Game.Objects.Transform> m_Transform;
-        [ReadOnly] public ComponentLookup<Game.Net.Edge> m_Edge;
-        [ReadOnly] public ComponentLookup<Game.Net.Node> m_Node;
-        [ReadOnly] public ComponentLookup<Building> m_Building;
-        [ReadOnly] public ComponentLookup<Temp> m_Temp;
 
         public void Execute()
         {
-            RadiusIterator iterator = new RadiusIterator { m_Center = m_Center, m_RadiusSq = m_RadiusSq, m_SearchBounds = m_SearchBounds, m_Results = new NativeList<Entity>(Allocator.Temp), m_Transform = m_Transform };
-            
-            // 1. STATIC OBJECT SEARCH
+            RadiusIterator iterator = new RadiusIterator { m_Center = m_Center, m_RadiusSq = m_RadiusSq, m_SearchBounds = m_SearchBounds, m_Results = m_Results, m_Transform = m_Transform };
             m_ObjectSearchTree.Iterate(ref iterator);
-            for (int i = 0; i < iterator.m_Results.Length; i++)
-            {
-                Entity entity = iterator.m_Results[i];
-                if (IsRootAndValid(entity)) m_Results.Add(entity);
-            }
-
-            // 2. NETWORK SEARCH
-            if ((m_Filters & DeleteFilters.Networks) != 0)
-            {
-                iterator.m_Results.Clear();
-                m_NetSearchTree.Iterate(ref iterator);
-                for (int i = 0; i < iterator.m_Results.Length; i++)
-                {
-                    Entity entity = iterator.m_Results[i];
-                    if (m_Temp.HasComponent(entity) || IsUnderground(entity)) continue;
-                    
-                    if (m_Edge.HasComponent(entity)) 
-                    { 
-                        m_Results.Add(entity); 
-                        m_EdgesFound.Add(entity); 
-                    }
-                    else if (m_Node.HasComponent(entity)) 
-                    {
-                        m_Results.Add(entity);
-                    }
-                }
-            }
-            iterator.m_Results.Dispose();
-        }
-
-        private bool IsUnderground(Entity entity)
-        {
-            if (m_Transform.HasComponent(entity))
-            {
-                // Falling back to height check because 'Underground' component is unreliable
-                return m_Transform[entity].m_Position.y < -1.0f;
-            }
-            return false;
-        }
-
-        private bool IsRootAndValid(Entity entity)
-        {
-            if (entity == Entity.Null || m_Temp.HasComponent(entity) || IsUnderground(entity)) return false;
-
-            // CRITICAL: Filter out child entities. 
-            // We only want parents (Edges, Nodes, standalone Props).
-            // Sub-elements are added via Cascade later.
-            if (m_Owner.HasComponent(entity) && m_Owner[entity].m_Owner != Entity.Null) return false;
-
-            if (!m_PrefabRef.HasComponent(entity)) return false;
-            Entity prefab = m_PrefabRef[entity].m_Prefab;
-            
-            bool isBuilding = m_BuildingData.HasComponent(prefab);
-            if ((m_Filters & DeleteFilters.Buildings) != 0 && isBuilding) return true;
-            if ((m_Filters & DeleteFilters.Trees) != 0 && m_TreeData.HasComponent(prefab)) return true;
-            if ((m_Filters & DeleteFilters.Plants) != 0 && m_PlantData.HasComponent(prefab)) return true;
-            if ((m_Filters & DeleteFilters.Props) != 0 && m_ObjectData.HasComponent(prefab) && !isBuilding) return true;
-            return false;
+            m_NetSearchTree.Iterate(ref iterator);
         }
     }
 
@@ -415,11 +359,15 @@ namespace RadiusDelete
         {
             if (Intersect(bounds))
             {
+                // Simple radius check. If no transform (Network Segment), accept it and filter later.
                 if (m_Transform.HasComponent(entity))
                 {
                     if (math.distancesq(m_Transform[entity].m_Position, m_Center) <= m_RadiusSq) m_Results.Add(entity);
                 }
-                else m_Results.Add(entity);
+                else
+                {
+                    m_Results.Add(entity);
+                }
             }
         }
     }
