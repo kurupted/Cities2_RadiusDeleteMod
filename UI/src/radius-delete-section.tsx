@@ -64,7 +64,7 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
                         type="range"
                         className={styles.slider}
                         min={5} max={200} step={5}
-                        value={radius || 20}
+                        value={radius || 25}
                         onChange={(e) => setRadius(parseFloat(e.target.value))}
                     />
                 </div>
