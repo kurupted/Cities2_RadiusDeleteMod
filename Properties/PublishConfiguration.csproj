@@ -40,7 +40,7 @@
 
 <Publish>
     <!-- Mod ID must be 0 for publishing a mod for the first time.  Mod ID must be set in order to update an existing mod. -->
-    <ModId Value="0" />
+    <ModId Value="134142" />
 
     <!-- Name of the mod to display to players.  Copied from assembly Title. -->
     <DisplayName Value="$(Title)" />
@@ -63,7 +63,7 @@ $(Screenshot00)$(Screenshot01)$(Screenshot02)$(Screenshot03)$(Screenshot04)$(Scr
     <Tag Value="Code Mod" />
 
     <!-- Link to the forum post where the mod can be discussed. -->
-    <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/todo/" />
+    <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/radius-delete-bulk-bulldoze.1900152/" />
 
     <!-- Version of the mod.  Copied from assembly Version. -->
     <ModVersion Value="$(Version)" />

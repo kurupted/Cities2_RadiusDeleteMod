@@ -4,7 +4,7 @@
 
 <Publish>
     <!-- Mod ID must be 0 for publishing a mod for the first time.  Mod ID must be set in order to update an existing mod. -->
-    <ModId Value="0" />
+    <ModId Value="134142" />
 
     <!-- Name of the mod to display to players.  Copied from assembly Title. -->
     <DisplayName Value="Radius Delete: Bulk Bulldoze" />
@@ -21,7 +21,7 @@ A radius bulldoze tool that supports object type filters.
 - Filters for object types (eg roads, buildings, trees, props)
 - Compatible with both the vanilla bulldozer and Better Bulldozer.
 ## How to Use:
-Open the bulldoze tool and there will be a new radius option.
+Open the bulldoze tool~~~~ and there will be a new radius option.
 
 IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.
 </LongDescription>
@@ -30,7 +30,7 @@ IMPORTANT: This is a beta version -- use at your own risk. Risk includes corrupt
     <Thumbnail Value="Properties/Thumbnail.png" />
 
     <!-- Screenshot.  Copied from Screenshots folder.  Include no spaces in file names.  Max file size is 2.1MB.  Can be set multiple times. -->
-    <Screenshot Value="" />
+    <Screenshot Value="Properties\Screenshots\10_thumbnail.png" />
 
 
     <!-- Tag.  Can be set multiple times. -->
@@ -54,7 +54,7 @@ IMPORTANT: This is a beta version -- use at your own risk. Risk includes corrupt
 
     <!-- Change log.  Copied from ChangeLog.md file.  Supports minimal markdown subset. -->
     <ChangeLog>
-
+- Initial Release.
 </ChangeLog>
 
     <!-- External links.  Can be set multiple times. -->
