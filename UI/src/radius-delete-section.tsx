@@ -3,53 +3,62 @@ import { bindValue, trigger, useValue } from "cs2/api";
 import { tool } from "cs2/bindings";
 import { VanillaComponentResolver } from "./vanilla-resolver";
 import styles from "./radius-delete.module.scss";
+import radiusIcon from "./img/RadiusDelete.svg";
+
 
 const toolState$ = bindValue<number>("RadiusDelete", "ToolState");
 const radius$ = bindValue<number>("RadiusDelete", "Radius");
 const filters$ = bindValue<number>("RadiusDelete", "Filters");
+
 
 export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
     const toolState = useValue(toolState$);
     const radius = useValue(radius$);
     const filters = useValue(filters$);
     const nativeActiveTool = useValue(tool.activeTool$);
-
+    
     const isOurToolActive = toolState === 2;
     const isBulldozerPanelOpen = nativeActiveTool.id === "Bulldoze Tool";
+    
+    const _forceBundle = radiusIcon;
 
-    const setRadius = (x: number) => trigger("RadiusDelete", "SetRadius", x);
-    const toggleFilter = (f: number) => trigger("RadiusDelete", "SetFilter", f);
-    const isFilterOn = (flag: number) => (filters & flag) === flag;
+    const setRadius = (x: number) => {
+        const val = isNaN(x) ? 30 : Math.max(1, Math.min(1000, x));
+        trigger("RadiusDelete", "SetRadius", val);
+    };
 
     const result = Component(props);
 
     if (isBulldozerPanelOpen) {
         const { Section, ToolButton, toolButtonTheme, FOCUS_DISABLED } = VanillaComponentResolver.instance;
+        const iconPath = "coui://ui-mods/images/RadiusDelete.svg";
 
         const myUI = (
             <div key="radius-delete-ui" className={styles.container}>
                 <Section title="Radius Mode Active">
                     <ToolButton
                         className={toolButtonTheme.button}
-                        selected={true}
-                        src="Media/Game/Icons/ZoneMarquee.svg"
+                        selected={isOurToolActive}
+                        src={iconPath}
                         onSelect={() => trigger("RadiusDelete", "ToggleTool")}
-                        tooltip="Switch to Single Delete"
+                        tooltip="Toggle Radius Delete Mode"
                         focusKey={FOCUS_DISABLED}
                     />
                 </Section>
 
-                <Section title={`Brush Size: ${Math.round(radius || 20)}m`}>
+                <Section title={`Brush Size: ${Math.round(radius || 30)}m`}>
                     <div className={styles.row}>
-                        <button className={styles.adjBtn} onClick={() => setRadius((radius || 20) - 5)}>-</button>
-                        <input
-                            type="range"
-                            className={styles.slider}
-                            min={5} max={200} step={5}
-                            value={radius || 20}
-                            onChange={(e) => setRadius(parseFloat(e.target.value))}
-                        />
-                        <button className={styles.adjBtn} onClick={() => setRadius((radius || 20) + 5)}>+</button>
+                        <div className={styles.inputGroup}>
+                            <button className={styles.adjBtn} onClick={() => setRadius((radius || 30) - 5)}>-</button>
+                            <input
+                                type="number"
+                                className={styles.numberInput}
+                                value={Math.round(radius || 30)}
+                                onChange={(e) => setRadius(parseInt(e.target.value))}
+                                onFocus={(e) => e.target.select()}
+                            />
+                            <button className={styles.adjBtn} onClick={() => setRadius((radius || 30) + 5)}>+</button>
+                        </div>
                     </div>
                 </Section>
 
@@ -66,14 +75,12 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
         );
 
         if (isOurToolActive) {
-            // HIDE EVERYTHING ELSE: Replace vanilla/other mod children with just our UI
             result.props.children = [myUI];
         } else {
-            // VANILLA MODE: Just add our entry button to the bottom
             const entryBtn = (
                 <Section title="Radius Delete" key="radius-entry">
                     <ToolButton
-                        src="Media/Game/Icons/ZoneMarquee.svg"
+                        src={iconPath}
                         onSelect={() => trigger("RadiusDelete", "ToggleTool")}
                         focusKey={FOCUS_DISABLED}
                     />

@@ -2,35 +2,73 @@
     display: flex;
     flex-direction: column;
     gap: 8rem;
+    box-sizing: border-box;
 }
 
-.radiusRow {
+.row {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 10rem;
-    padding: 4rem 0;
+    justify-content: center;
+    width: 100%;
+    min-height: 44rem;
+    padding: 0 4rem;
 }
 
-.stepBtn {
-    width: 32rem;
-    height: 32rem;
+.inputGroup {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6rem;
+}
+
+.adjBtn {
+    flex-shrink: 0;
+    width: 36rem;
+    height: 36rem;
     background: rgba(255, 255, 255, 0.1);
     border: 1rem solid rgba(255, 255, 255, 0.2);
+    border-radius: 4rem;
     color: white;
-    font-size: 18rem;
+    font-size: 20rem;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
     &:hover { background: rgba(255, 255, 255, 0.2); }
+    &:active { background: rgba(255, 255, 255, 0.3); }
 }
 
-.slider {
-    flex: 1;
-    height: 6rem;
+.numberInput {
+    width: 70rem;
+    height: 36rem;
+
+    background: rgba(0, 0, 0, 0.5);
+    border: 1rem solid rgba(255, 255, 255, 0.1);
+    border-radius: 4rem;
+    color: white;
+    font-size: 20rem;
+    text-align: center;
+    font-family: inherit;
+
+    appearance: textfield;
+    &::-webkit-inner-spin-button, &::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+    }
+
+    &:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.4);
+        background: rgba(0, 0, 0, 0.7);
+    }
 }
 
 .filterGrid {
-    display: flex; /* Flex-row layout */
+    display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 6rem;
+    gap: 8rem;
     justify-content: flex-start;
 }

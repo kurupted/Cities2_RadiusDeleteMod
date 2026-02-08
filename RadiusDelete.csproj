@@ -107,7 +107,6 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Properties\Screenshots\" />
-	  <Folder Include="src\Jobs\" />
 	</ItemGroup>
 
 </Project>

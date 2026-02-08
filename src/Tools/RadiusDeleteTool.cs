@@ -38,8 +38,8 @@ namespace RadiusDelete
         private ComponentLookup<PlantData> m_PlantData;
         private ComponentLookup<Game.Objects.Transform> m_Transform;
 
-        public float Radius = 20f;
-        public DeleteFilters ActiveFilters = DeleteFilters.All;
+        public float Radius = 30f;
+        public DeleteFilters ActiveFilters = DeleteFilters.All ^ DeleteFilters.Surfaces;
 
         public override string toolID => "Bulldoze Tool";
 
@@ -77,7 +77,9 @@ namespace RadiusDelete
         public override void InitializeRaycast()
         {
             base.InitializeRaycast();
-            m_ToolRaycastSystem.typeMask = TypeMask.Terrain | TypeMask.StaticObjects | TypeMask.Net;
+            // We only target Terrain. This ignores buildings, passing the ray 
+            // through them to hit the ground underneath.
+            m_ToolRaycastSystem.typeMask = TypeMask.Terrain;
             m_ToolRaycastSystem.collisionMask = CollisionMask.OnGround | CollisionMask.Overground;
         }
 
@@ -105,49 +107,47 @@ namespace RadiusDelete
                     return inputDeps;
                 }
 
+                float3 groundPos = hit.m_HitPosition;
+
                 NativeList<Entity> targets = new NativeList<Entity>(Allocator.TempJob);
-                RadiusDeleteSearchJob searchJob = new RadiusDeleteSearchJob
+                try
                 {
-                    m_Results = targets,
-                    m_Center = hit.m_HitPosition,
-                    m_RadiusSq = Radius * Radius,
-                    m_SearchBounds = new Bounds2(hit.m_HitPosition.xz - Radius, hit.m_HitPosition.xz + Radius),
-                    m_ObjectSearchTree = m_ObjectSearchSystem.GetStaticSearchTree(true, out JobHandle objDep),
-                    m_NetSearchTree = m_NetSearchSystem.GetNetSearchTree(true, out JobHandle netDep),
-                    m_Transform = m_Transform
-                };
-
-                JobHandle searchHandle = searchJob.Schedule(JobHandle.CombineDependencies(objDep, netDep, inputDeps));
-                searchHandle.Complete();
-
-                /* Highlighting trigger commented out per request
-                for (int i = 0; i < targets.Length; i++)
-                {
-                    Entity target = targets[i];
-                    if (EntityManager.Exists(target) && IsTypeValid(target, ActiveFilters, hit.m_HitPosition.y))
+                    RadiusDeleteSearchJob searchJob = new RadiusDeleteSearchJob
                     {
-                        EntityManager.AddComponent<Game.Tools.Highlighted>(target);
+                        m_Results = targets,
+                        m_Center = groundPos,
+                        m_RadiusSq = Radius * Radius,
+                        m_SearchBounds = new Bounds2(groundPos.xz - Radius, groundPos.xz + Radius),
+                        m_ObjectSearchTree = m_ObjectSearchSystem.GetStaticSearchTree(true, out JobHandle objDep),
+                        m_NetSearchTree = m_NetSearchSystem.GetNetSearchTree(true, out JobHandle netDep),
+                        m_Transform = m_Transform
+                    };
+
+                    JobHandle searchHandle = searchJob.Schedule(JobHandle.CombineDependencies(objDep, netDep, inputDeps));
+                    searchHandle.Complete();
+
+                    /* Highlighting disabled */
+
+                    RadiusDeleteVisualizationJob vizJob = new RadiusDeleteVisualizationJob()
+                    {
+                        m_OverlayBuffer = m_OverlayRenderSystem.GetBuffer(out JobHandle outJobHandle),
+                        m_Position = groundPos,
+                        m_Radius = Radius,
+                        m_Color = new UnityEngine.Color(1f, 0f, 0f, 0.4f)
+                    };
+                    inputDeps = vizJob.Schedule(JobHandle.CombineDependencies(searchHandle, outJobHandle));
+                    m_OverlayRenderSystem.AddBufferWriter(inputDeps);
+
+                    if (applyAction != null && applyAction.WasPressedThisFrame())
+                    {
+                        inputDeps.Complete();
+                        DeleteInRadius(groundPos, Radius, ActiveFilters);
                     }
                 }
-                */
-
-                RadiusDeleteVisualizationJob vizJob = new RadiusDeleteVisualizationJob()
+                finally
                 {
-                    m_OverlayBuffer = m_OverlayRenderSystem.GetBuffer(out JobHandle outJobHandle),
-                    m_Position = hit.m_HitPosition,
-                    m_Radius = Radius,
-                    m_Color = new UnityEngine.Color(1f, 0f, 0f, 0.4f)
-                };
-                inputDeps = vizJob.Schedule(JobHandle.CombineDependencies(searchHandle, outJobHandle));
-                m_OverlayRenderSystem.AddBufferWriter(inputDeps);
-
-                if (applyAction != null && applyAction.WasPressedThisFrame())
-                {
-                    inputDeps.Complete();
-                    DeleteInRadius(hit.m_HitPosition, Radius, ActiveFilters);
+                    if (targets.IsCreated) targets.Dispose();
                 }
-
-                targets.Dispose();
             }
             catch (System.Exception ex)
             {
@@ -165,12 +165,8 @@ namespace RadiusDelete
             netDep.Complete();
 
             NativeList<Entity> rawResults = new NativeList<Entity>(Allocator.Temp);
-            NativeParallelHashSet<Entity> finalDeleteSet = new NativeParallelHashSet<Entity>(500, Allocator.Temp);
             
-            var edgeLookup = SystemAPI.GetComponentLookup<Game.Net.Edge>(true);
-            var connectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
-
-            try
+            try 
             {
                 RadiusDeleteSearchJob searchJob = new RadiusDeleteSearchJob
                 {
@@ -184,47 +180,57 @@ namespace RadiusDelete
                 };
                 searchJob.Run();
 
-                for (int i = 0; i < rawResults.Length; i++)
+                NativeParallelHashSet<Entity> finalDeleteSet = new NativeParallelHashSet<Entity>(500, Allocator.Temp);
+                var edgeLookup = SystemAPI.GetComponentLookup<Game.Net.Edge>(true);
+                var connectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
+
+                try
                 {
-                    Entity entity = rawResults[i];
-                    if (!EntityManager.Exists(entity)) continue;
-
-                    if (IsTypeValid(entity, filters, center.y))
+                    for (int i = 0; i < rawResults.Length; i++)
                     {
-                        finalDeleteSet.Add(entity);
+                        Entity entity = rawResults[i];
+                        if (!EntityManager.Exists(entity)) continue;
 
-                        if (EntityManager.HasComponent<Game.Net.Node>(entity))
+                        if (IsTypeValid(entity, filters, center.y))
                         {
-                            if (connectedEdgesLookup.TryGetBuffer(entity, out var connections))
+                            finalDeleteSet.Add(entity);
+
+                            if (EntityManager.HasComponent<Game.Net.Node>(entity))
                             {
-                                for (int j = 0; j < connections.Length; j++)
+                                if (connectedEdgesLookup.TryGetBuffer(entity, out var connections))
                                 {
-                                    if (EntityManager.Exists(connections[j].m_Edge))
-                                        finalDeleteSet.Add(connections[j].m_Edge);
+                                    for (int j = 0; j < connections.Length; j++)
+                                    {
+                                        if (EntityManager.Exists(connections[j].m_Edge))
+                                            finalDeleteSet.Add(connections[j].m_Edge);
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                if (finalDeleteSet.Count() > 0)
-                {
-                    var deleteArray = finalDeleteSet.ToNativeArray(Allocator.Temp);
-                    for (int i = 0; i < deleteArray.Length; i++)
+                    if (finalDeleteSet.Count() > 0)
                     {
-                        if (edgeLookup.TryGetComponent(deleteArray[i], out var edge))
+                        var deleteArray = finalDeleteSet.ToNativeArray(Allocator.Temp);
+                        for (int i = 0; i < deleteArray.Length; i++)
                         {
-                            if (EntityManager.Exists(edge.m_Start)) EntityManager.AddComponent<Game.Common.Updated>(edge.m_Start);
-                            if (EntityManager.Exists(edge.m_End)) EntityManager.AddComponent<Game.Common.Updated>(edge.m_End);
+                            if (edgeLookup.TryGetComponent(deleteArray[i], out var edge))
+                            {
+                                if (EntityManager.Exists(edge.m_Start)) EntityManager.AddComponent<Game.Common.Updated>(edge.m_Start);
+                                if (EntityManager.Exists(edge.m_End)) EntityManager.AddComponent<Game.Common.Updated>(edge.m_End);
+                            }
                         }
+                        EntityManager.AddComponent<Game.Common.Deleted>(deleteArray);
                     }
-                    EntityManager.AddComponent<Game.Common.Deleted>(deleteArray);
+                }
+                finally
+                {
+                    if (finalDeleteSet.IsCreated) finalDeleteSet.Dispose();
                 }
             }
             finally
             {
                 if (rawResults.IsCreated) rawResults.Dispose();
-                if (finalDeleteSet.IsCreated) finalDeleteSet.Dispose();
             }
         }
 
@@ -232,26 +238,32 @@ namespace RadiusDelete
         {
             if (EntityManager.HasComponent<Game.Common.Deleted>(entity)) return false;
 
-            // 1. Relative Elevation check (Networks)
-            // Fixes CS1061: Use HasComponent and GetComponentData instead of TryGetComponent
             if (EntityManager.HasComponent<Game.Net.Elevation>(entity))
             {
                 var elevation = EntityManager.GetComponentData<Game.Net.Elevation>(entity);
                 if (elevation.m_Elevation.x < 0) return false;
             }
 
-            // 2. Absolute Depth check relative to the surface hit point (fixes the "hill" issue)
             if (EntityManager.HasComponent<Game.Objects.Transform>(entity))
             {
                 var transform = EntityManager.GetComponentData<Game.Objects.Transform>(entity);
-                if (transform.m_Position.y < surfaceHeight - 19.0f) return false;
+                if (transform.m_Position.y < surfaceHeight - 10.0f) return false;
             }
 
             if (EntityManager.HasComponent<Game.Objects.Marker>(entity)) return false;
-            if (EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null) return false;
 
             if (EntityManager.HasComponent<Game.Areas.Surface>(entity))
-                return (active & DeleteFilters.Surfaces) != 0;
+            {
+                if ((active & DeleteFilters.Surfaces) == 0) return false;
+                if (EntityManager.HasComponent<Game.Common.Owner>(entity))
+                {
+                    Entity owner = EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner;
+                    if (EntityManager.HasComponent<Game.Buildings.Building>(owner)) return false;
+                }
+                return true;
+            }
+
+            if (EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null) return false;
 
             if (!EntityManager.HasComponent<PrefabRef>(entity)) return false;
             Entity prefab = EntityManager.GetComponentData<PrefabRef>(entity).m_Prefab;
@@ -280,7 +292,7 @@ namespace RadiusDelete
             public UnityEngine.Color m_Color;
             public void Execute() 
             { 
-                m_OverlayBuffer.DrawCircle(m_Color, default, m_Radius / 20f, 0, new float2(0, 1), m_Position, m_Radius * 2f); 
+                m_OverlayBuffer.DrawCircle(m_Color, default, 1.0f, 0, new float2(0, 1), m_Position, m_Radius * 2f); 
             }
         }
     }
@@ -324,18 +336,8 @@ namespace RadiusDelete
         {
             if (Intersect(bounds))
             {
-                float3 position;
-                if (m_Transform.HasComponent(entity))
-                {
-                    position = m_Transform[entity].m_Position;
-                }
-                else
-                {
-                    // Fallback for Edges: calculate the center of the Bounds3 manually
-                    position = (bounds.m_Bounds.min + bounds.m_Bounds.max) * 0.5f;
-                }
-
-                if (math.distancesq(position, m_Center) <= m_RadiusSq) 
+                float3 closestPoint = math.clamp(m_Center, bounds.m_Bounds.min, bounds.m_Bounds.max);
+                if (math.distancesq(closestPoint, m_Center) <= m_RadiusSq)
                 {
                     m_Results.Add(entity);
                 }

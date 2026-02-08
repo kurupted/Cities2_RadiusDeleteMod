@@ -3,9 +3,8 @@ using Game.Tools;
 using Game.UI;
 using Game.UI.InGame;
 using Unity.Entities;
-using UnityEngine; // REQUIRED for Input and KeyCode
-
-using UnityEngine.InputSystem; // REQUIRED: Use the new Input System namespace
+using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace RadiusDelete
 {
@@ -30,8 +29,8 @@ namespace RadiusDelete
             m_RadiusDeleteTool = World.GetOrCreateSystemManaged<RadiusDeleteTool>();
             m_BulldozeToolSystem = World.GetOrCreateSystemManaged<BulldozeToolSystem>();
 
-            AddBinding(m_RadiusBinding = new ValueBinding<float>(ModId, "Radius", 20f));
-            AddBinding(m_FiltersBinding = new ValueBinding<int>(ModId, "Filters", (int)DeleteFilters.All));
+            AddBinding(m_RadiusBinding = new ValueBinding<float>(ModId, "Radius", 30f));
+            AddBinding(m_FiltersBinding = new ValueBinding<int>(ModId, "Filters", (int)(DeleteFilters.All ^ DeleteFilters.Surfaces)));
             AddBinding(m_ActiveToolState = new ValueBinding<int>(ModId, "ToolState", 0));
 
             AddBinding(new TriggerBinding(ModId, "ToggleTool", ToggleTool));
@@ -44,19 +43,6 @@ namespace RadiusDelete
         protected override void OnUpdate()
         {
             base.OnUpdate();
-
-            // FIX: Replaced 'Input.GetKey' with 'Keyboard.current' (New Input System)
-            // Debug Hotkey: Ctrl + K
-            if (Keyboard.current != null && 
-                Keyboard.current.kKey.wasPressedThisFrame && 
-                (Keyboard.current.leftCtrlKey.isPressed || Keyboard.current.rightCtrlKey.isPressed))
-            {
-                ToggleTool();
-                
-                // Ensure RadiusDeleteMod.Log is 'public static' in your Mod class
-                RadiusDeleteMod.Log.Info("RadiusDelete forced toggle via hotkey.");
-            }
-
             UpdateToolState(m_ToolSystem.activeTool);
         }
 
@@ -94,8 +80,6 @@ namespace RadiusDelete
             int state = 0;
             if (tool != null)
             {
-                // Reference check ensures we distinguish "Our Imposter Tool" from "Vanilla Tool"
-                // even though they share the same ID string.
                 if (tool == m_RadiusDeleteTool) 
                 {
                     state = 2; 
@@ -108,14 +92,12 @@ namespace RadiusDelete
             m_ActiveToolState.Update(state);
         }
 
-        // Inside RadiusDeleteUISystem.cs
 
         private void UpdateToolState(ToolBaseSystem tool)
         {
             int state = 0;
             if (tool != null)
             {
-                // Reference check is now mandatory because IDs are identical
                 if (tool == m_RadiusDeleteTool)
                 {
                     state = 2; // Our custom Radius Mode
