@@ -7,4 +7,4 @@ A radius bulldoze tool that supports object type filters.
 ## How to Use:
 Open the bulldoze tool and there will be a new radius option.
 
-IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.~~~~
+IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.

@@ -1,6 +1,3 @@
 ﻿
 - highlight objects to be deleted (objs within the radius)
 - allow for click and hold
-
-- thread
-- search todo

@@ -23,7 +23,7 @@ A radius bulldoze tool that supports object type filters.
 ## How to Use:
 Open the bulldoze tool and there will be a new radius option.
 
-IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.~~~~
+IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.
 </LongDescription>
 
     <!-- Thumbnail. -->
@@ -37,7 +37,7 @@ IMPORTANT: This is a beta version -- use at your own risk. Risk includes corrupt
     <Tag Value="Code Mod" />
 
     <!-- Link to the forum post where the mod can be discussed. -->
-    <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/todo/" />
+    <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/radius-delete-bulk-bulldoze.1900152/" />
 
     <!-- Version of the mod.  Copied from assembly Version. -->
     <ModVersion Value="1.0" />
