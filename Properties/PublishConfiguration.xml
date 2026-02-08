@@ -4,23 +4,26 @@
 
 <Publish>
     <!-- Mod ID must be 0 for publishing a mod for the first time.  Mod ID must be set in order to update an existing mod. -->
-    <ModId Value="128566" />
+    <ModId Value="0" />
 
     <!-- Name of the mod to display to players.  Copied from assembly Title. -->
     <DisplayName Value="Radius Delete: Bulk Bulldoze" />
 
     <!-- Short description of the mod.  Copied from assembly Description. -->
-    <ShortDescription Value="Bulk bulldoze with a radius tool. Supports filtering by object type." />
+    <ShortDescription Value="A radius bulldoze tool that supports object type filters." />
 
     <!-- Long description of the mod.  Copied from ReadMe.md file.  Supports minimal markdown subset. -->
     <LongDescription>
-# Radius Delete: Bulk Bulldoze
-Bulk bulldoze with a radius tool. Supports filtering by object type.
+# Radius Delete: Bulk Bulldoze (BETA)
+A radius bulldoze tool that supports object type filters.
 ## Features:
-- Todo
+- Adjustable radius size
+- Filters for object types (eg roads, buildings, trees, props)
+- Compatible with both the vanilla bulldozer and Better Bulldozer.
 ## How to Use:
 Open the bulldoze tool and there will be a new radius option.
-~~~~
+
+IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.~~~~
 </LongDescription>
 
     <!-- Thumbnail. -->
@@ -34,7 +37,7 @@ Open the bulldoze tool and there will be a new radius option.
     <Tag Value="Code Mod" />
 
     <!-- Link to the forum post where the mod can be discussed. -->
-    <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/traffic-spy.1884568/" />
+    <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/todo/" />
 
     <!-- Version of the mod.  Copied from assembly Version. -->
     <ModVersion Value="1.0" />
@@ -43,7 +46,7 @@ Open the bulldoze tool and there will be a new radius option.
     <GameVersion Value="1.5.*" />
 
     <!-- Dependency for the mod.  Can be set multiple times. -->
-    <Dependency Id="74417" />
+    <Dependency Id="" />
 
     <!-- Required DLC.  Can be set multiple times. -->
     <!-- Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture" -->
@@ -56,7 +59,7 @@ Open the bulldoze tool and there will be a new radius option.
 
     <!-- External links.  Can be set multiple times. -->
     <!-- Supported types are discord, github, youtube, twitch, x, paypal, patreon, buymeacoffee, kofi, crowdin, gitlab, gofundme. -->
-    <ExternalLink Type="github" Url="https://github.com/kurupted/CS2TrafficSpy" />
+    <ExternalLink Type="github" Url="https://github.com/kurupted/Cities2_RadiusDeleteMod" />
 
     <!-- Access Control Level.  Supported values: Public, Private, Unlisted -->
     <AccessLevel Value="Public" />

@@ -10,7 +10,7 @@
 		<PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
 		<DefaultItemExcludes>UI\node_modules\**;$(DefaultItemExcludes)</DefaultItemExcludes>
 		<AssemblyTitle>Radius Delete</AssemblyTitle>
-		<Description>Bulk bulldoze with a radius tool. Supports filtering by object type.</Description>
+		<Description>A radius bulldoze tool that supports object type filters.</Description>
 	</PropertyGroup>
 	
 	<!--Imports must be after PropertyGroup block-->

@@ -12,6 +12,6 @@ namespace RadiusDelete
         public const string Name        = "RadiusDelete";
         public const string Version     = "1.0";
         public const string Title       = "Radius Delete: Bulk Bulldoze";
-        public const string Description = "Bulk bulldoze with a radius tool. Supports filtering by object type.";
+        public const string Description = "A radius bulldoze tool that supports object type filters.";
     }
 }

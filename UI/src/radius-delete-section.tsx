@@ -68,7 +68,6 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
                         <FilterButton flag={2} label="Buildings" src="Media/Game/Icons/ZoneResidential.svg" current={filters} />
                         <FilterButton flag={4} label="Trees" src="Media/Game/Icons/Trees.svg" current={filters} />
                         <FilterButton flag={16} label="Props" src="Media/Game/Icons/Props.svg" current={filters} />
-                        <FilterButton flag={32} label="Surfaces" src="Media/Game/Icons/LotTool.svg" current={filters} />
                     </div>
                 </Section>
             </div>
