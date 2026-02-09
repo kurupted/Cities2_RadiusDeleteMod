@@ -32,6 +32,9 @@ namespace RadiusDelete
         private Game.Objects.SearchSystem m_ObjectSearchSystem;
         private Game.Net.SearchSystem m_NetSearchSystem;
         private EntityQuery m_HighlightQuery;
+        
+        // Use a barrier for safe deletion command buffering (prevents race conditions)
+        private ToolOutputBarrier m_ToolOutputBarrier;
 
         // ComponentLookups allow efficient access to entity component data during jobs
         private ComponentLookup<PrefabRef> m_PrefabRef;
@@ -54,6 +57,7 @@ namespace RadiusDelete
             m_OverlayRenderSystem = World.GetOrCreateSystemManaged<OverlayRenderSystem>();
             m_ObjectSearchSystem = World.GetOrCreateSystemManaged<Game.Objects.SearchSystem>();
             m_NetSearchSystem = World.GetOrCreateSystemManaged<Game.Net.SearchSystem>();
+            m_ToolOutputBarrier = World.GetOrCreateSystemManaged<ToolOutputBarrier>();
 
             // Initialize component lookups
             m_PrefabRef = SystemAPI.GetComponentLookup<PrefabRef>(true);
@@ -202,6 +206,7 @@ namespace RadiusDelete
                 NativeParallelHashSet<Entity> finalDeleteSet = new NativeParallelHashSet<Entity>(500, Allocator.Temp);
                 var edgeLookup = SystemAPI.GetComponentLookup<Game.Net.Edge>(true);
                 var connectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
+                var subObjectLookup = SystemAPI.GetBufferLookup<Game.Objects.SubObject>(true);
 
                 try
                 {
@@ -234,18 +239,53 @@ namespace RadiusDelete
                     // Apply the deletion components
                     if (finalDeleteSet.Count() > 0)
                     {
+                        // Use buffer for safe deletion (prevents race conditions with simulation threads)
+                        EntityCommandBuffer buffer = m_ToolOutputBarrier.CreateCommandBuffer();
                         var deleteArray = finalDeleteSet.ToNativeArray(Allocator.Temp);
+
                         for (int i = 0; i < deleteArray.Length; i++)
                         {
-                            // If deleting an edge, mark its start/end nodes as Updated to refresh geometry
-                            if (edgeLookup.TryGetComponent(deleteArray[i], out var edge))
+                            Entity currentEntity = deleteArray[i];
+
+                            // 1. Recursive Neighborhood Update & Orphaned Node Cleanup
+                            // If deleting an edge, check if its start/end nodes become orphaned (0 connections).
+                            // If not orphaned, mark neighbors as Updated to refresh geometry.
+                            if (edgeLookup.TryGetComponent(currentEntity, out var edge))
                             {
-                                if (EntityManager.Exists(edge.m_Start)) EntityManager.AddComponent<Game.Common.Updated>(edge.m_Start);
-                                if (EntityManager.Exists(edge.m_End)) EntityManager.AddComponent<Game.Common.Updated>(edge.m_End);
+                                // Check Start Node
+                                if (connectedEdgesLookup.TryGetBuffer(edge.m_Start, out var startEdges))
+                                {
+                                    if (startEdges.Length == 1 && startEdges[0].m_Edge == currentEntity)
+                                        buffer.AddComponent<Game.Common.Deleted>(edge.m_Start); // Orphaned Node cleanup
+                                    else
+                                        UpdateNeighbors(edge.m_Start, currentEntity, ref buffer, connectedEdgesLookup, edgeLookup);
+                                }
+
+                                // Check End Node
+                                if (connectedEdgesLookup.TryGetBuffer(edge.m_End, out var endEdges))
+                                {
+                                    if (endEdges.Length == 1 && endEdges[0].m_Edge == currentEntity)
+                                        buffer.AddComponent<Game.Common.Deleted>(edge.m_End); // Orphaned Node cleanup
+                                    else
+                                        UpdateNeighbors(edge.m_End, currentEntity, ref buffer, connectedEdgesLookup, edgeLookup);
+                                }
                             }
+
+                            // 2. Sub-Object Deep Deletion (for Buildings/Extensions)
+                            // Ensures props/sub-buildings are removed immediately rather than lingering.
+                            if (subObjectLookup.TryGetBuffer(currentEntity, out var subObjects))
+                            {
+                                foreach (var sub in subObjects)
+                                {
+                                    if (EntityManager.Exists(sub.m_SubObject))
+                                        buffer.AddComponent<Game.Common.Deleted>(sub.m_SubObject);
+                                }
+                            }
+
+                            // 3. Final Deletion Tag
+                            // Tagging with 'Deleted' causes the game systems to remove the entity
+                            buffer.AddComponent<Game.Common.Deleted>(currentEntity);
                         }
-                        // Tagging with 'Deleted' causes the game systems to remove the entity
-                        EntityManager.AddComponent<Game.Common.Deleted>(deleteArray);
                     }
                 }
                 finally
@@ -256,6 +296,28 @@ namespace RadiusDelete
             finally
             {
                 if (rawResults.IsCreated) rawResults.Dispose();
+            }
+        }
+
+        // Helper to recursively update neighboring network segments to prevent visual ghosting
+        private void UpdateNeighbors(Entity node, Entity originalEdge, ref EntityCommandBuffer buffer, BufferLookup<ConnectedEdge> connectedLookup, ComponentLookup<Game.Net.Edge> edgeLookup)
+        {
+            if (connectedLookup.TryGetBuffer(node, out var connections))
+            {
+                buffer.AddComponent<Game.Common.Updated>(node);
+                foreach (var connection in connections)
+                {
+                    if (connection.m_Edge != originalEdge && EntityManager.Exists(connection.m_Edge))
+                    {
+                        buffer.AddComponent<Game.Common.Updated>(connection.m_Edge);
+                        // Also update the far end of the neighbor edge to fully refresh the segment
+                        if (edgeLookup.TryGetComponent(connection.m_Edge, out var neighborEdge))
+                        {
+                            buffer.AddComponent<Game.Common.Updated>(neighborEdge.m_Start);
+                            buffer.AddComponent<Game.Common.Updated>(neighborEdge.m_End);
+                        }
+                    }
+                }
             }
         }
 
@@ -292,8 +354,20 @@ namespace RadiusDelete
                 return true;
             }
 
-            // Don't delete objects that have an Owner (e.g., props attached to a building)
-            if (EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null) return false;
+            // Handle objects with an Owner (e.g., props or extensions attached to a building)
+            if (EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null)
+            {
+                // Allow deleting Building Extensions or Service Upgrades individually if the Buildings filter is active.
+                // This specifically allows targeting "sub-buildings" without affecting the main parent building.
+                if ((active & DeleteFilters.Buildings) != 0 && 
+                    (EntityManager.HasComponent<Game.Buildings.Extension>(entity) || EntityManager.HasComponent<Game.Buildings.ServiceUpgrade>(entity)))
+                {
+                    return true;
+                }
+
+                // Protect other owned objects (like props or small decorative pieces) from being deleted individually.
+                return false;
+            }
 
             if (!EntityManager.HasComponent<PrefabRef>(entity)) return false;
             Entity prefab = EntityManager.GetComponentData<PrefabRef>(entity).m_Prefab;
