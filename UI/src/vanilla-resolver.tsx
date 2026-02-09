@@ -1,10 +1,12 @@
 import { ModuleRegistry } from "cs2/modding";
+import {Theme} from "cs2/bindings";
 
 const registryIndex = {
     Section: ["game-ui/game/components/tool-options/mouse-tool-options/mouse-tool-options.tsx", "Section"],
     ToolButton: ["game-ui/game/components/tool-options/tool-button/tool-button.tsx", "ToolButton"],
     toolButtonTheme: ["game-ui/game/components/tool-options/tool-button/tool-button.module.scss", "classes"],
     FocusKey: ["game-ui/common/focus/focus-key.ts", "FocusKey"],
+    mouseToolOptionsTheme: ["game-ui/game/components/tool-options/mouse-tool-options/mouse-tool-options.module.scss", "classes"],
 };
 
 export class VanillaComponentResolver {
@@ -30,8 +32,9 @@ export class VanillaComponentResolver {
     public get Section(): any { return this.cachedData["Section"] ?? this.updateCache("Section") ?? "div" }
     public get ToolButton(): any { return this.cachedData["ToolButton"] ?? this.updateCache("ToolButton") ?? "button" }
     public get toolButtonTheme(): any { return this.cachedData["toolButtonTheme"] ?? this.updateCache("toolButtonTheme") ?? {} }
+    public get mouseToolOptionsTheme(): Theme | any { return this.cachedData["mouseToolOptionsTheme"] ?? this.updateCache("mouseToolOptionsTheme") }
+    
 
-    // Critical for preventing UI crash
     public get FOCUS_DISABLED(): any {
         const FocusKey = this.cachedData["FocusKey"] ?? this.updateCache("FocusKey");
         return FocusKey?.NONE ?? null;

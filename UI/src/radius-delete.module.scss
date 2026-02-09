@@ -5,52 +5,31 @@
     box-sizing: border-box;
 }
 
-.row {
+.filterGrid {
     display: flex;
     flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 44rem;
-    padding: 0 4rem;
+    flex-wrap: wrap;
+    gap: 8rem;
+    justify-content: flex-start;
 }
 
-.inputGroup {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 6rem;
-}
-
-.adjBtn {
-    flex-shrink: 0;
-    width: 36rem;
-    height: 36rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1rem solid rgba(255, 255, 255, 0.2);
-    border-radius: 4rem;
+.cleanInput {
+    width: 60rem;
+    height: 30rem;
+    border: none;
+    background: rgba(0, 0, 0, 0.4);
     color: white;
-    font-size: 20rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &:hover { background: rgba(255, 255, 255, 0.2); }
-    &:active { background: rgba(255, 255, 255, 0.3); }
-}
-
-.numberInput {
-    width: 70rem;
-    height: 36rem;
-
-    background: rgba(0, 0, 0, 0.5);
-    border: 1rem solid rgba(255, 255, 255, 0.1);
-    border-radius: 4rem;
-    color: white;
-    font-size: 20rem;
-    text-align: center;
+    font-size: 14rem;
+    font-weight: 600;
     font-family: inherit;
+    text-align: center;
+    line-height: 30rem;
+    padding: 0;
+
+    &:focus {
+        outline: none;
+        background: rgba(255, 255, 255, 0.1);
+    }
 
     appearance: textfield;
     &::-webkit-inner-spin-button, &::-webkit-outer-spin-button {
@@ -58,17 +37,9 @@
         margin: 0;
     }
 
-    &:focus {
-        outline: none;
-        border-color: rgba(255, 255, 255, 0.4);
-        background: rgba(0, 0, 0, 0.7);
-    }
-}
 
-.filterGrid {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8rem;
-    justify-content: flex-start;
+    .greenIcon {
+        color: #61cb65 !important;
+    }
+    
 }
