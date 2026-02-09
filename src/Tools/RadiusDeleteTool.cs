@@ -32,7 +32,7 @@ namespace RadiusDelete
         private Game.Objects.SearchSystem m_ObjectSearchSystem;
         private Game.Net.SearchSystem m_NetSearchSystem;
         private EntityQuery m_HighlightQuery;
-        
+
         // Use a barrier for safe deletion command buffering (prevents race conditions)
         private ToolOutputBarrier m_ToolOutputBarrier;
 
@@ -83,6 +83,7 @@ namespace RadiusDelete
             if (applyAction != null) applyAction.shouldBeEnabled = false;
             if (!m_HighlightQuery.IsEmptyIgnoreFilter)
             {
+                EntityManager.AddComponent<Game.Common.BatchesUpdated>(m_HighlightQuery);
                 EntityManager.RemoveComponent<Game.Tools.Highlighted>(m_HighlightQuery);
             }
         }
@@ -112,6 +113,7 @@ namespace RadiusDelete
             // Clear any lingering highlight components
             if (!m_HighlightQuery.IsEmptyIgnoreFilter)
             {
+                EntityManager.AddComponent<Game.Common.BatchesUpdated>(m_HighlightQuery);
                 EntityManager.RemoveComponent<Game.Tools.Highlighted>(m_HighlightQuery);
             }
 
@@ -129,7 +131,6 @@ namespace RadiusDelete
                 try
                 {
                     // Run a search query around the cursor position. 
-                    // (Currently unused but structure exists for potential highlighting or pre-calculation).
                     RadiusDeleteSearchJob searchJob = new RadiusDeleteSearchJob
                     {
                         m_Results = targets,
@@ -144,7 +145,39 @@ namespace RadiusDelete
                     JobHandle searchHandle = searchJob.Schedule(JobHandle.CombineDependencies(objDep, netDep, inputDeps));
                     searchHandle.Complete();
 
-                    /* Highlighting disabled */
+                    // Perform highlighting for valid targets within the radius when not actively deleting
+                    if (applyAction != null && !applyAction.IsPressed())
+                    {
+                        EntityCommandBuffer highlightBuffer = m_ToolOutputBarrier.CreateCommandBuffer();
+                        var connectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
+
+                        for (int i = 0; i < targets.Length; i++)
+                        {
+                            Entity entity = targets[i];
+                            if (IsTypeValid(entity, ActiveFilters, groundPos.y))
+                            {
+                                highlightBuffer.AddComponent<Game.Tools.Highlighted>(entity);
+                                highlightBuffer.AddComponent<Game.Common.BatchesUpdated>(entity);
+
+                                // If the targeted entity is a node, highlight connected edges as they are included in deletion logic
+                                if (EntityManager.HasComponent<Game.Net.Node>(entity))
+                                {
+                                    if (connectedEdgesLookup.TryGetBuffer(entity, out var connections))
+                                    {
+                                        for (int j = 0; j < connections.Length; j++)
+                                        {
+                                            Entity edgeEntity = connections[j].m_Edge;
+                                            if (EntityManager.Exists(edgeEntity))
+                                            {
+                                                highlightBuffer.AddComponent<Game.Tools.Highlighted>(edgeEntity);
+                                                highlightBuffer.AddComponent<Game.Common.BatchesUpdated>(edgeEntity);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Queue a job to draw the tool's visual radius circle on the overlay
                     RadiusDeleteVisualizationJob vizJob = new RadiusDeleteVisualizationJob()
@@ -157,8 +190,8 @@ namespace RadiusDelete
                     inputDeps = vizJob.Schedule(JobHandle.CombineDependencies(searchHandle, outJobHandle));
                     m_OverlayRenderSystem.AddBufferWriter(inputDeps);
 
-                    // Check if the user clicked (Apply Action)
-                    if (applyAction != null && applyAction.WasPressedThisFrame())
+                    // Check if the user is clicking or dragging (Apply Action)
+                    if (applyAction != null && applyAction.IsPressed())
                     {
                         inputDeps.Complete();
                         DeleteInRadius(groundPos, Radius, ActiveFilters);
