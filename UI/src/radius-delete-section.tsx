@@ -3,7 +3,6 @@ import { bindValue, trigger, useValue } from "cs2/api";
 import { tool } from "cs2/bindings";
 import { VanillaComponentResolver } from "./vanilla-resolver";
 import styles from "./radius-delete.module.scss";
-import radiusIcon from "./img/RadiusDelete.svg";
 
 const arrowDownSrc = "coui://uil/Standard/ArrowDownThickStroke.svg";
 const arrowUpSrc = "coui://uil/Standard/ArrowUpThickStroke.svg";
@@ -22,8 +21,6 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
     const isOurToolActive = toolState === 2;
     const isBulldozerPanelOpen = nativeActiveTool.id === "Bulldoze Tool";
 
-    const _forceBundle = radiusIcon;
-
     const setRadius = (x: number) => {
         const val = isNaN(x) ? 30 : Math.max(1, Math.min(1000, x));
         trigger("RadiusDelete", "SetRadius", val);
@@ -33,7 +30,7 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
 
     if (isBulldozerPanelOpen) {
         const { Section, ToolButton, toolButtonTheme, mouseToolOptionsTheme, FOCUS_DISABLED } = VanillaComponentResolver.instance;
-        const iconPath = "coui://ui-mods/images/RadiusDelete.svg";
+        const iconPath = "data:image/svg+xml;base64,77u/PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+DQogICAgPGVsbGlwc2UgY3g9IjE2IiBjeT0iMjAiIHJ4PSIxNCIgcnk9IjciIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgLz4NCiAgICA8bGluZSB4MT0iMTYiIHkxPSIyMCIgeDI9IjE2IiB5Mj0iOCIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiAvPg0KPC9zdmc+";
 
         const myUI = (
             <div key="radius-delete-ui" className={styles.container}>
@@ -76,7 +73,6 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
                     <div className={styles.filterGrid}>
                         <FilterButton flag={1} label="Nets" src="Media/Game/Icons/Roads.svg" current={filters} />
                         <FilterButton flag={2} label="Buildings" src="Media/Game/Icons/ZoneResidential.svg" current={filters} />
-
                         <FilterButton
                             flag={4}
                             label="Trees"
@@ -84,8 +80,8 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
                             current={filters}
                             className={styles.greenIcon}
                         />
-
                         <FilterButton flag={16} label="Props" src="Media/Game/Icons/Props.svg" current={filters} />
+                        <FilterButton flag={32} label="Surfaces" src="Media/Game/Icons/LotTool.svg" current={filters} />
                     </div>
                 </Section>
             </div>

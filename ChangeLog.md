@@ -1,4 +1,2 @@
-- Highlight items to be deleted
-- Allow click and drag
-- UI improvements
-- Under-the-hood improvements
+- Can now delete user-placed surfaces
+- Fixed the loading delay for the tool icon

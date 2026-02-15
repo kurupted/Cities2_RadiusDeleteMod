@@ -31,6 +31,7 @@ namespace RadiusDelete
         private OverlayRenderSystem m_OverlayRenderSystem;
         private Game.Objects.SearchSystem m_ObjectSearchSystem;
         private Game.Net.SearchSystem m_NetSearchSystem;
+        private Game.Areas.SearchSystem m_AreaSearchSystem;
         private EntityQuery m_HighlightQuery;
 
         // Use a barrier for safe deletion command buffering (prevents race conditions)
@@ -57,6 +58,7 @@ namespace RadiusDelete
             m_OverlayRenderSystem = World.GetOrCreateSystemManaged<OverlayRenderSystem>();
             m_ObjectSearchSystem = World.GetOrCreateSystemManaged<Game.Objects.SearchSystem>();
             m_NetSearchSystem = World.GetOrCreateSystemManaged<Game.Net.SearchSystem>();
+            m_AreaSearchSystem = World.GetOrCreateSystemManaged<Game.Areas.SearchSystem>();
             m_ToolOutputBarrier = World.GetOrCreateSystemManaged<ToolOutputBarrier>();
 
             // Initialize component lookups
@@ -139,10 +141,11 @@ namespace RadiusDelete
                         m_SearchBounds = new Bounds2(groundPos.xz - Radius, groundPos.xz + Radius),
                         m_ObjectSearchTree = m_ObjectSearchSystem.GetStaticSearchTree(true, out JobHandle objDep),
                         m_NetSearchTree = m_NetSearchSystem.GetNetSearchTree(true, out JobHandle netDep),
+                        m_AreaSearchTree = m_AreaSearchSystem.GetSearchTree(true, out JobHandle areaDep),
                         m_Transform = m_Transform
                     };
 
-                    JobHandle searchHandle = searchJob.Schedule(JobHandle.CombineDependencies(objDep, netDep, inputDeps));
+                    JobHandle searchHandle = searchJob.Schedule(JobHandle.CombineDependencies(objDep, netDep, JobHandle.CombineDependencies(areaDep, inputDeps)));
                     searchHandle.Complete();
 
                     // Perform highlighting for valid targets within the radius when not actively deleting
@@ -213,11 +216,13 @@ namespace RadiusDelete
 
         private void DeleteInRadius(float3 center, float radius, DeleteFilters filters)
         {
-            // Retrieve spatial search trees for objects and networks
+            // Retrieve spatial search trees for objects, networks, and areas
             var objTree = m_ObjectSearchSystem.GetStaticSearchTree(true, out JobHandle objDep);
             var netTree = m_NetSearchSystem.GetNetSearchTree(true, out JobHandle netDep);
+            var areaTree = m_AreaSearchSystem.GetSearchTree(true, out JobHandle areaDep);
             objDep.Complete();
             netDep.Complete();
+            areaDep.Complete();
 
             NativeList<Entity> rawResults = new NativeList<Entity>(Allocator.Temp);
             
@@ -232,6 +237,7 @@ namespace RadiusDelete
                     m_SearchBounds = new Bounds2(center.xz - radius, center.xz + radius),
                     m_ObjectSearchTree = objTree,
                     m_NetSearchTree = netTree,
+                    m_AreaSearchTree = areaTree,
                     m_Transform = m_Transform
                 };
                 searchJob.Run();
@@ -375,16 +381,14 @@ namespace RadiusDelete
             if (EntityManager.HasComponent<Game.Objects.Marker>(entity)) return false;
 
             // Special handling for Surfaces (Areas)
+            // Only delete if manually placed (no owner) or modified by user (overridden)
             if (EntityManager.HasComponent<Game.Areas.Surface>(entity))
             {
                 if ((active & DeleteFilters.Surfaces) == 0) return false;
-                // Don't delete surfaces owned by a building (e.g., pavement attached to a house)
-                if (EntityManager.HasComponent<Game.Common.Owner>(entity))
-                {
-                    Entity owner = EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner;
-                    if (EntityManager.HasComponent<Game.Buildings.Building>(owner)) return false;
-                }
-                return true;
+                bool hasOwner = EntityManager.HasComponent<Game.Common.Owner>(entity) && EntityManager.GetComponentData<Game.Common.Owner>(entity).m_Owner != Entity.Null;
+                bool isOverridden = EntityManager.HasComponent<Game.Common.Overridden>(entity);
+                if (!hasOwner || isOverridden) return true;
+                return false;
             }
 
             // Handle objects with an Owner (e.g., props or extensions attached to a building)
@@ -446,18 +450,22 @@ namespace RadiusDelete
         public Bounds2 m_SearchBounds;
         [ReadOnly] public NativeQuadTree<Entity, QuadTreeBoundsXZ> m_ObjectSearchTree;
         [ReadOnly] public NativeQuadTree<Entity, QuadTreeBoundsXZ> m_NetSearchTree;
+        [ReadOnly] public NativeQuadTree<AreaSearchItem, QuadTreeBoundsXZ> m_AreaSearchTree; // Corrected: Uses AreaSearchItem type
         [ReadOnly] public ComponentLookup<Game.Objects.Transform> m_Transform;
 
         public void Execute()
         {
+            // Object & Network iterators
             RadiusIterator iterator = new RadiusIterator { m_Center = m_Center, m_RadiusSq = m_RadiusSq, m_SearchBounds = m_SearchBounds, m_Results = m_Results, m_Transform = m_Transform };
-            // Iterate both object and network trees
             m_ObjectSearchTree.Iterate(ref iterator);
             m_NetSearchTree.Iterate(ref iterator);
+            // Specialized iterator for AreaSearchItem
+            AreaRadiusIterator areaIterator = new AreaRadiusIterator { m_Center = m_Center, m_RadiusSq = m_RadiusSq, m_SearchBounds = m_SearchBounds, m_Results = m_Results };
+            m_AreaSearchTree.Iterate(ref areaIterator);
         }
     }
 
-    // Iterator struct for the QuadTree
+    // Iterator struct for standard Entity-based QuadTrees
     public struct RadiusIterator : INativeQuadTreeIterator<Entity, QuadTreeBoundsXZ>
     {
         public float3 m_Center;
@@ -486,6 +494,34 @@ namespace RadiusDelete
                 if (math.distancesq(closestPoint, m_Center) <= m_RadiusSq)
                 {
                     m_Results.Add(entity);
+                }
+            }
+        }
+    }
+
+    public struct AreaRadiusIterator : INativeQuadTreeIterator<AreaSearchItem, QuadTreeBoundsXZ>
+    {
+        public float3 m_Center;
+        public float m_RadiusSq;
+        public Bounds2 m_SearchBounds;
+        public NativeList<Entity> m_Results;
+
+        public bool Intersect(QuadTreeBoundsXZ bounds)
+        {
+            float3 min = bounds.m_Bounds.min; float3 max = bounds.m_Bounds.max;
+            bool overlapX = (max.x >= m_SearchBounds.min.x) && (min.x <= m_SearchBounds.max.x);
+            bool overlapZ = (max.z >= m_SearchBounds.min.y) && (min.z <= m_SearchBounds.max.y);
+            return overlapX && overlapZ;
+        }
+
+        public void Iterate(QuadTreeBoundsXZ bounds, AreaSearchItem item)
+        {
+            if (Intersect(bounds))
+            {
+                float3 closestPoint = math.clamp(m_Center, bounds.m_Bounds.min, bounds.m_Bounds.max);
+                if (math.distancesq(closestPoint, m_Center) <= m_RadiusSq)
+                {
+                    m_Results.Add(item.m_Area); // Extract the Area entity from the search item
                 }
             }
         }

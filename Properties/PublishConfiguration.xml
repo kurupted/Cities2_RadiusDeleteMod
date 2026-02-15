@@ -10,20 +10,22 @@
     <DisplayName Value="Radius Delete: Bulk Bulldoze" />
 
     <!-- Short description of the mod.  Copied from assembly Description. -->
-    <ShortDescription Value="A radius bulldoze tool that supports object type filters." />
+    <ShortDescription Value="A radius bulldoze tool with object type filters." />
 
     <!-- Long description of the mod.  Copied from ReadMe.md file.  Supports minimal markdown subset. -->
     <LongDescription>
-# Radius Delete: Bulk Bulldoze (BETA)
-A radius bulldoze tool that supports object type filters.
+# Radius Delete: Bulk Bulldoze
+A radius bulldoze tool with object type filters.
+
 ## Features:
 - Adjustable radius size
-- Filters for object types (eg roads, buildings, trees, props)
+- Filters for object types (roads, buildings, trees, props, surfaces)
 - Compatible with both the vanilla bulldozer and Better Bulldozer.
+
 ## How to Use:
 Open the bulldoze tool and there will be a new radius option.
 
-IMPORTANT: This is a beta version -- use at your own risk. Risk includes corruption of your save file.
+Also check out my other mod, Traffic Spy :)
 </LongDescription>
 
     <!-- Thumbnail. -->
@@ -43,7 +45,7 @@ IMPORTANT: This is a beta version -- use at your own risk. Risk includes corrupt
     <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/radius-delete-bulk-bulldoze.1900152/" />
 
     <!-- Version of the mod.  Copied from assembly Version. -->
-    <ModVersion Value="1.1" />
+    <ModVersion Value="1.2" />
 
     <!-- Recommended version of the base game to use the mod. -->
     <GameVersion Value="1.5.*" />
@@ -57,10 +59,8 @@ IMPORTANT: This is a beta version -- use at your own risk. Risk includes corrupt
 
     <!-- Change log.  Copied from ChangeLog.md file.  Supports minimal markdown subset. -->
     <ChangeLog>
-- Highlight items to be deleted
-- Allow click and drag
-- UI improvements
-- Under-the-hood improvements
+- Can now delete user-placed surfaces
+- Fixed the loading delay for the tool icon
 </ChangeLog>
 
     <!-- External links.  Can be set multiple times. -->
