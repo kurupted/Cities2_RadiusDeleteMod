@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<Configurations>Debug;Release</Configurations>
 		<Title>Radius Delete: Bulk Bulldoze</Title>
-		<Version>1.0</Version>
+		<Version>1.1</Version>
 		<Copyright>Copyright © 2026</Copyright>
 	
 		<!--The file where mod information which is required for publishing mod on PDX mods are stored-->

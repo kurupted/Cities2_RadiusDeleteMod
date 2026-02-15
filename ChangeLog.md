@@ -1,1 +1,4 @@
-- Initial Release.
+- Highlight items to be deleted
+- Allow click and drag
+- UI improvements
+- Under-the-hood improvements
