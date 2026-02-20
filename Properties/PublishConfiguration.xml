@@ -45,7 +45,7 @@ Also check out my other mod, Traffic Spy :)
     <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/radius-delete-bulk-bulldoze.1900152/" />
 
     <!-- Version of the mod.  Copied from assembly Version. -->
-    <ModVersion Value="1.2" />
+    <ModVersion Value="1.2.1" />
 
     <!-- Recommended version of the base game to use the mod. -->
     <GameVersion Value="1.5.*" />
@@ -59,8 +59,7 @@ Also check out my other mod, Traffic Spy :)
 
     <!-- Change log.  Copied from ChangeLog.md file.  Supports minimal markdown subset. -->
     <ChangeLog>
-- Can now delete user-placed surfaces
-- Fixed the loading delay for the tool icon
+- Fixed null reference warnings that occured in some situations
 </ChangeLog>
 
     <!-- External links.  Can be set multiple times. -->

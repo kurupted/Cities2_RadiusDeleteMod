@@ -1,2 +1,1 @@
-- Can now delete user-placed surfaces
-- Fixed the loading delay for the tool icon
+- Fixed null reference warnings that occured in some situations

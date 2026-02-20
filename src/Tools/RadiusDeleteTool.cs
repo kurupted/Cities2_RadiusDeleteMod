@@ -44,6 +44,9 @@ namespace RadiusDelete
         private ComponentLookup<ObjectData> m_ObjectData;
         private ComponentLookup<PlantData> m_PlantData;
         private ComponentLookup<Game.Objects.Transform> m_Transform;
+        private ComponentLookup<Game.Net.Edge> m_EdgeLookup;
+        private BufferLookup<Game.Net.ConnectedEdge> m_ConnectedEdgesLookup;
+        private BufferLookup<Game.Objects.SubObject> m_SubObjectLookup;
 
         // Tool settings: radius size and active filters (Surfaces are excluded by default)
         public float Radius = 30f;
@@ -68,6 +71,9 @@ namespace RadiusDelete
             m_ObjectData = SystemAPI.GetComponentLookup<ObjectData>(true);
             m_PlantData = SystemAPI.GetComponentLookup<PlantData>(true);
             m_Transform = SystemAPI.GetComponentLookup<Game.Objects.Transform>(true);
+            m_EdgeLookup = SystemAPI.GetComponentLookup<Game.Net.Edge>(true);
+            m_ConnectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
+            m_SubObjectLookup = SystemAPI.GetBufferLookup<Game.Objects.SubObject>(true);
 
             // Query for handling highlighted entities (cleanup)
             m_HighlightQuery = GetEntityQuery(ComponentType.ReadWrite<Game.Tools.Highlighted>());
@@ -102,22 +108,27 @@ namespace RadiusDelete
         public override PrefabBase GetPrefab() => null;
         public override bool TrySetPrefab(PrefabBase prefab) => false;
 
+        
         protected override JobHandle OnUpdate(JobHandle inputDeps)
         {
-            // Refresh component lookups every frame to ensure data validity
+            // 1. STRUCTURAL CHANGES FIRST
+            // Clear any lingering highlight components which moves entities in memory.
+            if (!m_HighlightQuery.IsEmptyIgnoreFilter)
+            {
+                EntityManager.AddComponent<Game.Common.BatchesUpdated>(m_HighlightQuery);
+                EntityManager.RemoveComponent<Game.Tools.Highlighted>(m_HighlightQuery);
+            }
+
+            // 2. REFRESH LOOKUPS AFTER STRUCTURAL CHANGES
             m_PrefabRef.Update(this);
             m_BuildingData.Update(this);
             m_TreeData.Update(this);
             m_ObjectData.Update(this);
             m_PlantData.Update(this);
             m_Transform.Update(this);
-
-            // Clear any lingering highlight components
-            if (!m_HighlightQuery.IsEmptyIgnoreFilter)
-            {
-                EntityManager.AddComponent<Game.Common.BatchesUpdated>(m_HighlightQuery);
-                EntityManager.RemoveComponent<Game.Tools.Highlighted>(m_HighlightQuery);
-            }
+            m_EdgeLookup.Update(this);
+            m_ConnectedEdgesLookup.Update(this);
+            m_SubObjectLookup.Update(this);
 
             try
             {
@@ -152,7 +163,6 @@ namespace RadiusDelete
                     if (applyAction != null && !applyAction.IsPressed())
                     {
                         EntityCommandBuffer highlightBuffer = m_ToolOutputBarrier.CreateCommandBuffer();
-                        var connectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
 
                         for (int i = 0; i < targets.Length; i++)
                         {
@@ -165,7 +175,7 @@ namespace RadiusDelete
                                 // If the targeted entity is a node, highlight connected edges as they are included in deletion logic
                                 if (EntityManager.HasComponent<Game.Net.Node>(entity))
                                 {
-                                    if (connectedEdgesLookup.TryGetBuffer(entity, out var connections))
+                                    if (m_ConnectedEdgesLookup.TryGetBuffer(entity, out var connections))
                                     {
                                         for (int j = 0; j < connections.Length; j++)
                                         {
@@ -208,11 +218,12 @@ namespace RadiusDelete
             }
             catch (System.Exception ex)
             {
-                RadiusDeleteMod.Log.Warn($"RadiusTool Update Error: {ex.Message}");
+                RadiusDeleteMod.Log.Warn($"RadiusTool Update Error: {ex.ToString()}");
             }
 
             return inputDeps;
         }
+                
 
         private void DeleteInRadius(float3 center, float radius, DeleteFilters filters)
         {
@@ -243,9 +254,6 @@ namespace RadiusDelete
                 searchJob.Run();
 
                 NativeParallelHashSet<Entity> finalDeleteSet = new NativeParallelHashSet<Entity>(500, Allocator.Temp);
-                var edgeLookup = SystemAPI.GetComponentLookup<Game.Net.Edge>(true);
-                var connectedEdgesLookup = SystemAPI.GetBufferLookup<Game.Net.ConnectedEdge>(true);
-                var subObjectLookup = SystemAPI.GetBufferLookup<Game.Objects.SubObject>(true);
 
                 try
                 {
@@ -263,7 +271,7 @@ namespace RadiusDelete
                             // If deleting a Network Node, also find and delete attached Edges
                             if (EntityManager.HasComponent<Game.Net.Node>(entity))
                             {
-                                if (connectedEdgesLookup.TryGetBuffer(entity, out var connections))
+                                if (m_ConnectedEdgesLookup.TryGetBuffer(entity, out var connections))
                                 {
                                     for (int j = 0; j < connections.Length; j++)
                                     {
@@ -289,30 +297,30 @@ namespace RadiusDelete
                             // 1. Recursive Neighborhood Update & Orphaned Node Cleanup
                             // If deleting an edge, check if its start/end nodes become orphaned (0 connections).
                             // If not orphaned, mark neighbors as Updated to refresh geometry.
-                            if (edgeLookup.TryGetComponent(currentEntity, out var edge))
+                            if (m_EdgeLookup.TryGetComponent(currentEntity, out var edge))
                             {
                                 // Check Start Node
-                                if (connectedEdgesLookup.TryGetBuffer(edge.m_Start, out var startEdges))
+                                if (m_ConnectedEdgesLookup.TryGetBuffer(edge.m_Start, out var startEdges))
                                 {
                                     if (startEdges.Length == 1 && startEdges[0].m_Edge == currentEntity)
                                         buffer.AddComponent<Game.Common.Deleted>(edge.m_Start); // Orphaned Node cleanup
                                     else
-                                        UpdateNeighbors(edge.m_Start, currentEntity, ref buffer, connectedEdgesLookup, edgeLookup);
+                                        UpdateNeighbors(edge.m_Start, currentEntity, ref buffer);
                                 }
 
                                 // Check End Node
-                                if (connectedEdgesLookup.TryGetBuffer(edge.m_End, out var endEdges))
+                                if (m_ConnectedEdgesLookup.TryGetBuffer(edge.m_End, out var endEdges))
                                 {
                                     if (endEdges.Length == 1 && endEdges[0].m_Edge == currentEntity)
                                         buffer.AddComponent<Game.Common.Deleted>(edge.m_End); // Orphaned Node cleanup
                                     else
-                                        UpdateNeighbors(edge.m_End, currentEntity, ref buffer, connectedEdgesLookup, edgeLookup);
+                                        UpdateNeighbors(edge.m_End, currentEntity, ref buffer);
                                 }
                             }
 
                             // 2. Sub-Object Deep Deletion (for Buildings/Extensions)
                             // Ensures props/sub-buildings are removed immediately rather than lingering.
-                            if (subObjectLookup.TryGetBuffer(currentEntity, out var subObjects))
+                            if (m_SubObjectLookup.TryGetBuffer(currentEntity, out var subObjects))
                             {
                                 foreach (var sub in subObjects)
                                 {
@@ -338,10 +346,11 @@ namespace RadiusDelete
             }
         }
 
+        
         // Helper to recursively update neighboring network segments to prevent visual ghosting
-        private void UpdateNeighbors(Entity node, Entity originalEdge, ref EntityCommandBuffer buffer, BufferLookup<ConnectedEdge> connectedLookup, ComponentLookup<Game.Net.Edge> edgeLookup)
+        private void UpdateNeighbors(Entity node, Entity originalEdge, ref EntityCommandBuffer buffer)
         {
-            if (connectedLookup.TryGetBuffer(node, out var connections))
+            if (m_ConnectedEdgesLookup.TryGetBuffer(node, out var connections))
             {
                 buffer.AddComponent<Game.Common.Updated>(node);
                 foreach (var connection in connections)
@@ -350,7 +359,7 @@ namespace RadiusDelete
                     {
                         buffer.AddComponent<Game.Common.Updated>(connection.m_Edge);
                         // Also update the far end of the neighbor edge to fully refresh the segment
-                        if (edgeLookup.TryGetComponent(connection.m_Edge, out var neighborEdge))
+                        if (m_EdgeLookup.TryGetComponent(connection.m_Edge, out var neighborEdge))
                         {
                             buffer.AddComponent<Game.Common.Updated>(neighborEdge.m_Start);
                             buffer.AddComponent<Game.Common.Updated>(neighborEdge.m_End);

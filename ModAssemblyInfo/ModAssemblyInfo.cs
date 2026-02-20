@@ -10,7 +10,7 @@ namespace RadiusDelete
     public class ModAssemblyInfo
     {
         public const string Name        = "RadiusDelete";
-        public const string Version     = "1.2";
+        public const string Version     = "1.2.1";
         public const string Title       = "Radius Delete: Bulk Bulldoze";
         public const string Description = "A radius bulldoze tool with object type filters.";
     }
