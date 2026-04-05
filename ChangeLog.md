@@ -1,1 +1,1 @@
-- Fixed null reference warnings that occured in some situations
+- Fixed a rare focus error.
