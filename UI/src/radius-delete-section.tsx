@@ -1,6 +1,7 @@
 import React from "react";
 import { bindValue, trigger, useValue } from "cs2/api";
 import { tool } from "cs2/bindings";
+import { FOCUS_DISABLED } from "cs2/ui";
 import { VanillaComponentResolver } from "./vanilla-resolver";
 import styles from "./radius-delete.module.scss";
 
@@ -29,7 +30,7 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
     const result = Component(props);
 
     if (isBulldozerPanelOpen) {
-        const { Section, ToolButton, toolButtonTheme, mouseToolOptionsTheme, FOCUS_DISABLED } = VanillaComponentResolver.instance;
+        const { Section, ToolButton, toolButtonTheme, mouseToolOptionsTheme } = VanillaComponentResolver.instance;
         const iconPath = "data:image/svg+xml;base64,77u/PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+DQogICAgPGVsbGlwc2UgY3g9IjE2IiBjeT0iMjAiIHJ4PSIxNCIgcnk9IjciIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgLz4NCiAgICA8bGluZSB4MT0iMTYiIHkxPSIyMCIgeDI9IjE2IiB5Mj0iOCIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiAvPg0KPC9zdmc+";
 
         const myUI = (
@@ -108,7 +109,7 @@ export const RadiusDeleteSection: any = (Component: any) => (props: any) => {
 };
 
 const FilterButton = ({ flag, label, src, current, className }: any) => {
-    const { ToolButton, toolButtonTheme, FOCUS_DISABLED } = VanillaComponentResolver.instance;
+    const { ToolButton, toolButtonTheme } = VanillaComponentResolver.instance;
     return (
         <ToolButton
             className={`${toolButtonTheme.button} ${className || ''}`}

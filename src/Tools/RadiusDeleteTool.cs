@@ -325,12 +325,17 @@ namespace RadiusDelete
                                 foreach (var sub in subObjects)
                                 {
                                     if (EntityManager.Exists(sub.m_SubObject))
+                                    {
+                                        buffer.AddComponent<Game.Common.Updated>(sub.m_SubObject);
+                                        buffer.AddComponent<Game.Common.BatchesUpdated>(sub.m_SubObject);
                                         buffer.AddComponent<Game.Common.Deleted>(sub.m_SubObject);
+                                    }
                                 }
                             }
 
                             // 3. Final Deletion Tag
-                            // Tagging with 'Deleted' causes the game systems to remove the entity
+                            buffer.AddComponent<Game.Common.Updated>(currentEntity);
+                            buffer.AddComponent<Game.Common.BatchesUpdated>(currentEntity);
                             buffer.AddComponent<Game.Common.Deleted>(currentEntity);
                         }
                     }
