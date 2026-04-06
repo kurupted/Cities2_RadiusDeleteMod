@@ -5,7 +5,7 @@ const registryIndex = {
     Section: ["game-ui/game/components/tool-options/mouse-tool-options/mouse-tool-options.tsx", "Section"],
     ToolButton: ["game-ui/game/components/tool-options/tool-button/tool-button.tsx", "ToolButton"],
     toolButtonTheme: ["game-ui/game/components/tool-options/tool-button/tool-button.module.scss", "classes"],
-    FocusKey: ["game-ui/common/focus/focus-key.ts", "FocusKey"],
+    FOCUS_DISABLED: ["game-ui/common/focus/focus-key.ts", "FOCUS_DISABLED"],
     mouseToolOptionsTheme: ["game-ui/game/components/tool-options/mouse-tool-options/mouse-tool-options.module.scss", "classes"],
 };
 
@@ -33,10 +33,8 @@ export class VanillaComponentResolver {
     public get ToolButton(): any { return this.cachedData["ToolButton"] ?? this.updateCache("ToolButton") ?? "button" }
     public get toolButtonTheme(): any { return this.cachedData["toolButtonTheme"] ?? this.updateCache("toolButtonTheme") ?? {} }
     public get mouseToolOptionsTheme(): Theme | any { return this.cachedData["mouseToolOptionsTheme"] ?? this.updateCache("mouseToolOptionsTheme") }
-    
 
     public get FOCUS_DISABLED(): any {
-        const FocusKey = this.cachedData["FocusKey"] ?? this.updateCache("FocusKey");
-        return FocusKey?.NONE ?? null;
+        return this.cachedData["FOCUS_DISABLED"] ?? this.updateCache("FOCUS_DISABLED");
     }
 }

@@ -31,12 +31,6 @@
         background: rgba(255, 255, 255, 0.1);
     }
 
-    appearance: textfield;
-    &::-webkit-inner-spin-button, &::-webkit-outer-spin-button {
-        appearance: none;
-        margin: 0;
-    }
-
 
     .greenIcon {
         fill: #61cb65 !important;

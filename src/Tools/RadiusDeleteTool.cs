@@ -235,7 +235,7 @@ namespace RadiusDelete
             netDep.Complete();
             areaDep.Complete();
 
-            NativeList<Entity> rawResults = new NativeList<Entity>(Allocator.Temp);
+            NativeList<Entity> rawResults = new NativeList<Entity>(Allocator.TempJob); 
             
             try 
             {

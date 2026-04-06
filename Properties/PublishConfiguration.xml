@@ -25,7 +25,7 @@ A radius bulldoze tool with object type filters.
 ## How to Use:
 Open the bulldoze tool and there will be a new radius option.
 
-Also check out my other mod, Traffic Spy :)
+Also check out my other mods, Better Transit View and Traffic Spy :)
 </LongDescription>
 
     <!-- Thumbnail. -->
@@ -45,7 +45,7 @@ Also check out my other mod, Traffic Spy :)
     <ForumLink Value="https://forum.paradoxplaza.com/forum/threads/radius-delete-bulk-bulldoze.1900152/" />
 
     <!-- Version of the mod.  Copied from assembly Version. -->
-    <ModVersion Value="1.2.2" />
+    <ModVersion Value="1.2.3" />
 
     <!-- Recommended version of the base game to use the mod. -->
     <GameVersion Value="1.5.*" />
